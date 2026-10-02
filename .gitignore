@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.env
+.env.*
+!.env.example
+# never commit sheet exports or patient / doctor data
+data/
+*.csv
+*.xlsx

@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #f6f8fb;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+input[type="checkbox"] {
+  accent-color: #172a5c;
+  width: 14px;
+  height: 14px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
