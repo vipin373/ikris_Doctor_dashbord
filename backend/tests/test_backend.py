@@ -18,7 +18,10 @@ from app.core import security  # noqa: E402
 from app.core.security import CurrentUser  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services import mapping, sync_service  # noqa: E402
-from app.services.mapping import TabContext, detect_kind, map_doctor_tab, map_feedback_tab, merge_doctors  # noqa: E402
+from app.services import sheet_bridge  # noqa: E402
+from app.services.mapping import (  # noqa: E402
+    TabContext, a1_to_index, detect_kind, map_doctor_tab, map_feedback_tab, map_template_tab, merge_doctors, parse_date,
+)
 
 NPP_SHEET = [
     ["Doctor Name", "Specialty", "Hospital", "City", "Email", "1st Mail Status", "1st Mail Date", "20th Mail Status", "Error"],
@@ -203,7 +206,7 @@ class MemoryDB:
             "google_sheet_tabs": [{"id": 10, "source_id": 1, "tab_name": "Doctors", "sheet_gid": 0, "data_kind": "doctors",
                                    "department_code": "NPP", "sub_department": None, "specialty": None,
                                    "mapping": NPP_MAPPING, "is_enabled": True, "headers": []}],
-            "doctors": [], "doctor_source_rows": [], "communication_events": [], "patient_feedback": [],
+            "doctors": [], "doctor_source_rows": [], "communication_events": [], "patient_feedback": [], "email_templates": [],
             "google_sheet_sync_logs": [],
         }
         self.seq = 100
@@ -227,6 +230,19 @@ class MemoryDB:
             self.tables[table].append(new)
             out.append(new)
         return out if returning else []
+
+    async def delete(self, table, filters):
+        def keep(r):
+            for col, cond in filters:
+                op, _, val = cond.partition(".")
+                if op == "eq" and str(r.get(col)) != val:
+                    return True
+                if op == "not" and val.startswith("in.("):
+                    values = [v.strip('"') for v in val[4:-1].split(",")]
+                    if r.get(col) in values:
+                        return True
+            return False
+        self.tables[table] = [r for r in self.tables[table] if keep(r)]
 
     async def update(self, table, filters, data, returning=None):
         hit = []
@@ -271,6 +287,100 @@ def test_sync_is_incremental_and_never_deletes(monkeypatch):
     assert third["doctors"]["updated"] == 1
     assert len(db.tables["doctors"]) == 3      # nothing deleted
     assert third["flagged_missing"] >= 1
+
+
+TEMPLATE_CELLS = [["Default Subject", "Hello {{DoctorName}}"], ["Body (HTML)", "<p>Dear {{DoctorName}},</p>\n<p>Line</p>"], [],
+                  ["Merge tags", "{{DoctorName}}"], ["Note", "Sent on the 1st"]]
+CAMPAIGNS = [["Campaign", "Specialty", "Subject", "Email Body", "Active"],
+             ["1st Mail", "HEMA", "Intro", "<div>Hi</div>", "yes"],
+             ["20th Mail", "ONC", "Follow-up", "Dear Dr. {{Doctor Name}},", "no"]]
+SUBJECTS = [["Subject Lines (edit freely)", "", "Next Index (auto-managed)", "2"], ["First"], [" Second with space"], [""], ["Fourth"]]
+
+
+def test_template_layouts():
+    cells = map_template_tab(TabContext("s", "Email Template 1", "RARE_DISEASES", None, None,
+                                        {"layout": "cells", "subject_cell": "B1", "body_cell": "B2", "notes_cells": ["B4", "B5"]}), TEMPLATE_CELLS)
+    assert cells[0]["subject"] == "Hello {{DoctorName}}"
+    assert cells[0]["body_html"].count("\n") == 1               # line breaks kept
+    assert cells[0]["notes"] == "Merge tags: {{DoctorName}}\nNote: Sent on the 1st"
+    empty = map_template_tab(TabContext("s", "Email Template 3", "RARE_DISEASES", None, None,
+                                        {"layout": "cells", "subject_cell": "B1", "body_cell": "B2"}), [])
+    assert empty[0]["subject"] is None and empty[0]["name"] == "Email Template 3"
+
+    rows = map_template_tab(TabContext("s", "Campaigns", "NPP", None, None, {"layout": "rows", "columns": {
+        "campaign": "Campaign", "specialty": "Specialty", "subject": "Subject", "body": "Email Body", "active": "Active"}}), CAMPAIGNS)
+    assert [r["is_active"] for r in rows] == [True, False]
+    assert rows[1]["body_cell"] == "D3" and rows[1]["active_cell"] == "E3" and rows[1]["name"] == "20th Mail · ONC"
+
+    subjects = map_template_tab(TabContext("s", "Subject Lines", "RARE_DISEASES", None, None, {
+        "layout": "subject_list", "column": "A", "start_row": 2, "info_cells": {"Next index": "D1"}}), SUBJECTS)
+    assert [(t["subject"], t["subject_cell"]) for t in subjects] == [("First", "A2"), (" Second with space", "A3"), ("Fourth", "A5")]
+    assert subjects[0]["notes"] == "Next index: 2"
+    assert a1_to_index("AB12") == (11, 27)
+
+
+def test_birthday_formats():
+    sheet = [["Doctor Name", "Email", "Date of Birth", "Date of Anniversary"],
+             ["Dr A", "a@example.com", "15-Aug", "03/10/1990"],
+             ["Dr B", "b@example.com", "29 Feb", "not a date"]]
+    res = map_doctor_tab(ctx("RARE_DISEASES", {"date_formats": ["%m/%d/%Y"]}), sheet)
+    a, b = res.doctors
+    assert a.fields["date_of_birth"] == "1904-08-15"            # year-less birthday
+    assert a.fields["date_of_anniversary"] == "1990-03-10"      # tab format (US) first
+    assert b.fields["date_of_birth"] == "1904-02-29"
+    assert "date_of_anniversary_invalid" in b.issues
+    assert parse_date("21-09-2026", ["%d-%m-%Y"]).day == 21
+
+
+def test_bridge_script_and_url():
+    script = sheet_bridge.render_script("sheet-id", "Demo", "tok", ["Email Template 1", "Subject Lines"])
+    assert "var IKRIS_TOKEN = 'tok';" in script and "['Email Template 1', 'Subject Lines']" in script
+    assert sheet_bridge.valid_url("https://script.google.com/macros/s/AKfycbx-12_ab/exec")
+    assert not sheet_bridge.valid_url("https://evil.example.com/macros/s/x/exec")
+    with pytest.raises(sheet_bridge.BridgeNotConnected):
+        asyncio.run(sheet_bridge.update_cells({"bridge_url": None, "bridge_token": "t"}, []))
+
+
+def test_template_and_calendar_endpoints_need_login():
+    c = TestClient(app)
+    for path in ("/api/templates", "/api/calendar?month=2026-10", "/api/calendar/upcoming"):
+        assert c.get(path).status_code == 401
+
+
+def test_schedule_is_admin_only(client):
+    app.dependency_overrides[security.get_current_user] = lambda: user("NPP")
+    assert client.put("/api/calendar/schedule", json=[]).status_code == 403
+    assert client.get("/api/google-sheets/sources/1/editing").status_code == 403
+
+
+def test_template_rejects_forbidden_department(client):
+    app.dependency_overrides[security.get_current_user] = lambda: user("NPP")
+    assert client.get("/api/templates?department=RARE_DISEASES").status_code == 403
+
+
+def test_sync_templates_mirror_sheet(monkeypatch):
+    db = MemoryDB()
+    db.tables["google_sheet_tabs"].append({
+        "id": 11, "source_id": 1, "tab_name": "Subject Lines", "sheet_gid": 5, "data_kind": "templates",
+        "department_code": "NPP", "sub_department": None, "specialty": None, "is_enabled": True, "headers": [],
+        "mapping": {"layout": "subject_list", "column": "A", "start_row": 2},
+    })
+    sheets = {"Doctors": [list(r) for r in NPP_SHEET], "Subject Lines": [list(r) for r in SUBJECTS]}
+
+    async def fake_read(spreadsheet_id, tab_name, gid, mode):
+        return sheets[tab_name]
+
+    async def no_discovery(*a, **k):
+        return []
+    monkeypatch.setattr(sync_service, "_sync_db", lambda user: db)
+    monkeypatch.setattr(sync_service, "read_tab", fake_read)
+    monkeypatch.setattr(sync_service, "_discover", no_discovery)
+
+    first = asyncio.run(sync_service.run_sync(None))
+    assert first["templates"] == 3 and len(db.tables["email_templates"]) == 3
+    sheets["Subject Lines"] = [SUBJECTS[0], ["First"], ["Fourth"]]      # one line removed in the sheet
+    asyncio.run(sync_service.run_sync(None))
+    assert sorted(t["subject"] for t in db.tables["email_templates"]) == ["First", "Fourth"]
 
 
 def test_sync_needs_admin_or_service_key(monkeypatch):

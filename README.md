@@ -21,8 +21,10 @@ Google Sheets ──► Sync service (FastAPI) ──► Supabase PostgreSQL (+ 
 | Doctor profile: business info, contact, dates, engagement, activity timeline, Google Sheet source traceability with original values | Done |
 | NPP (Oncology / Hematology) and Rare Disease (dynamic specialty) views | Done |
 | Dashboard and patient feedback analytics | Done |
+| Email templates: view, live preview, edit from the dashboard (written back to the Google Sheet) | Done |
+| Calendar: birthdays, anniversaries, automation sends, feedback requests, scheduled runs | Done |
 | Users and audit logs | Done |
-| Sending email / WhatsApp from the app, reply tracking, campaigns, audience builder, birthdays, follow-ups | Phase 2 |
+| Sending email / WhatsApp from the app, reply tracking, campaigns, audience builder, follow-ups | Phase 2 |
 
 ## Connected Google Sheets
 

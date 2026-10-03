@@ -155,10 +155,25 @@ def parse_date(value: str | None, formats: list[str]) -> datetime | None:
     text = value.strip()
     for fmt in formats:
         try:
-            return datetime.strptime(text, fmt).replace(tzinfo=IST)
+            if "%Y" not in fmt:
+                parsed = datetime.strptime(f"{text} 1904", f"{fmt} %Y")
+            else:
+                parsed = datetime.strptime(text, fmt)
+            return parsed.replace(tzinfo=IST)
         except ValueError:
             continue
     return None
+
+
+def _person_date_formats(tab_formats: list[str]) -> list[str]:
+    """Birthdays are usually typed by hand: tab formats first, then day-first
+    and written-month forms. Year-less values (e.g. "15-Aug") get year 1904."""
+    extra = DEFAULT_DATE_FORMATS + ["%d-%b-%Y", "%d %B %Y", "%d %b %Y", "%d-%B-%Y", "%d.%m.%Y", "%d-%b", "%d %B", "%d %b"]
+    out: list[str] = []
+    for f in tab_formats + extra:
+        if f not in out:
+            out.append(f)
+    return out
 
 
 def record_hash(data: dict[str, Any]) -> str:
@@ -320,7 +335,7 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
 
         for date_field in ("date_of_birth", "date_of_anniversary"):
             if fields.get(date_field):
-                parsed = parse_date(fields[date_field], formats + ["%d-%b", "%d %B", "%d-%b-%Y", "%d %B %Y"])
+                parsed = parse_date(fields[date_field], _person_date_formats(formats))
                 if parsed is None:
                     issues.append(f"{date_field}_invalid")
                     fields[date_field] = None
@@ -530,3 +545,108 @@ def merge_doctors(tab_results: list[tuple[TabContext, TabResult]]) -> tuple[list
     for doc in merged.values():
         doc.record_hash = record_hash({"f": doc.fields, "i": sorted(doc.issues)})
     return list(merged.values()), duplicates
+
+
+# --------------------------------------------------------------------------- templates
+
+def a1_to_index(ref: str) -> tuple[int, int]:
+    """'B2' -> (row 1, col 1), 0-based."""
+    m = re.fullmatch(r"([A-Za-z]+)(\d+)", ref.strip())
+    if not m:
+        raise ValueError(f"Bad cell reference: {ref}")
+    col = 0
+    for ch in m.group(1).upper():
+        col = col * 26 + (ord(ch) - 64)
+    return int(m.group(2)) - 1, col - 1
+
+
+def _cell(values: list[list[Any]], ref: str) -> str | None:
+    r, c = a1_to_index(ref)
+    if r < len(values) and c < len(values[r]):
+        v = values[r][c]
+        return None if v is None or str(v) == "" else str(v)
+    return None
+
+
+def _left_label(values: list[list[Any]], ref: str) -> str | None:
+    r, c = a1_to_index(ref)
+    if c == 0:
+        return None
+    return _cell(values, f"{column_letter(c - 1)}{r + 1}")
+
+
+def map_template_tab(ctx: TabContext, values: list[list[Any]]) -> list[dict[str, Any]]:
+    """Read email templates from a tab. Text is kept exactly as written
+    (HTML, line breaks and leading spaces matter to the automation)."""
+    m = ctx.mapping or {}
+    layout = m.get("layout")
+    out: list[dict[str, Any]] = []
+    if layout == "cells":
+        notes = []
+        for ref in m.get("notes_cells", []):
+            value = _cell(values, ref)
+            if value:
+                label = _left_label(values, ref)
+                notes.append(f"{label}: {value}" if label else value)
+        out.append({
+            "source_ref": "cells", "kind": "email", "name": ctx.sheet_name,
+            "subject": _cell(values, m["subject_cell"]), "body_html": _cell(values, m["body_cell"]),
+            "subject_cell": m["subject_cell"], "body_cell": m["body_cell"], "active_cell": None,
+            "is_active": None, "campaign": None, "specialty": None,
+            "notes": "\n".join(notes) or None, "sort_order": 0,
+        })
+    elif layout == "rows":
+        if not values:
+            return out
+        header = [norm_header(str(h)) for h in values[0]]
+        cols = {}
+        for key, name in (m.get("columns") or {}).items():
+            if norm_header(name) in header:
+                cols[key] = header.index(norm_header(name))
+        def get(row: list[Any], key: str) -> str | None:
+            i = cols.get(key)
+            if i is None or i >= len(row) or row[i] in (None, ""):
+                return None
+            return str(row[i])
+        def ref(key: str, row_no: int) -> str | None:
+            return f"{column_letter(cols[key])}{row_no}" if key in cols else None
+        for offset, row in enumerate(values[1:], start=2):
+            if not any(str(v).strip() for v in row):
+                continue
+            campaign, specialty = get(row, "campaign"), get(row, "specialty")
+            active = get(row, "active")
+            out.append({
+                "source_ref": f"row:{offset}", "kind": "campaign",
+                "name": " · ".join(p for p in (campaign, specialty) if p) or f"Row {offset}",
+                "campaign": campaign, "specialty": specialty,
+                "subject": get(row, "subject"), "body_html": get(row, "body"),
+                "subject_cell": ref("subject", offset), "body_cell": ref("body", offset),
+                "active_cell": ref("active", offset),
+                "is_active": (active or "").strip().lower() in ("yes", "y", "true", "active", "1") if "active" in cols else None,
+                "notes": None, "sort_order": offset,
+            })
+    elif layout == "subject_list":
+        col = m.get("column", "A")
+        _, c = a1_to_index(f"{col}1")
+        start = int(m.get("start_row", 2))
+        info = []
+        for label, cell_ref in (m.get("info_cells") or {}).items():
+            value = _cell(values, cell_ref)
+            if value is not None:
+                info.append(f"{label}: {value}")
+        n = 0
+        for r in range(start - 1, len(values)):
+            row = values[r]
+            value = str(row[c]) if c < len(row) and row[c] not in (None, "") else ""
+            if not value.strip():
+                continue
+            n += 1
+            out.append({
+                "source_ref": f"row:{r + 1}", "kind": "subject_line", "name": f"Subject line {n}",
+                "subject": value, "body_html": None, "subject_cell": f"{col}{r + 1}", "body_cell": None,
+                "active_cell": None, "is_active": None, "campaign": None, "specialty": None,
+                "notes": "\n".join(info) or None, "sort_order": r + 1,
+            })
+    else:
+        raise ValueError(f"Unknown template layout '{layout}'")
+    return out

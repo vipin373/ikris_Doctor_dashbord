@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Circle, ExternalLink, FileSpreadsheet, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Copy, ExternalLink, FileSpreadsheet, Link2, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { Badge, departmentTone, statusTone } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ export default function GoogleSheetsPage() {
   const [step, setStep] = React.useState(-1);
   const [result, setResult] = React.useState<SyncResult | null>(null);
   const [editing, setEditing] = React.useState<SheetTab | null>(null);
+  const [editingSource, setEditingSource] = React.useState<SheetSource | null>(null);
   const conn = useQuery({ queryKey: ["sheets"], queryFn: () => api.get<Connections>("/google-sheets"), enabled: me?.role === "ADMIN" });
   const history = useQuery({ queryKey: ["sync-history"], queryFn: () => api.get<SyncLog[]>("/google-sheets/sync-history"), enabled: me?.role === "ADMIN" });
 
@@ -144,6 +145,28 @@ export default function GoogleSheetsPage() {
         </Card>
       )}
 
+      {sources.some((src) => src.tabs.some((t) => t.data_kind === "templates")) && (
+        <Card className="mb-5">
+          <CardHeader title="Edit templates from the dashboard"
+            description="Lets the Email Templates page write changes back into the Google Sheet. One-time setup per spreadsheet." />
+          <div className="divide-y divide-line">
+            {sources.filter((src) => src.tabs.some((t) => t.data_kind === "templates")).map((src) => (
+              <div key={src.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-700" />
+                <div className="min-w-[200px] flex-1">
+                  <p className="text-sm font-medium text-ink">{src.name}</p>
+                  <p className="text-xs text-ink-soft">{src.tabs.filter((t) => t.data_kind === "templates").map((t) => t.tab_name).join(", ")}</p>
+                </div>
+                {src.write_bridge_url ? <Badge tone="green"><CheckCircle2 className="h-3 w-3" /> Connected</Badge> : <Badge tone="amber">Not connected</Badge>}
+                <Button size="sm" variant={src.write_bridge_url ? "outline" : "primary"} onClick={() => setEditingSource(src)}>
+                  <Link2 className="h-3.5 w-3.5" /> {src.write_bridge_url ? "Manage" : "Set up"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card>
         <CardHeader title="Connected sheets and tabs" description="Tabs are mapped to a department; new tabs are discovered automatically when a service account is configured." />
         <div className="overflow-x-auto">
@@ -165,7 +188,7 @@ export default function GoogleSheetsPage() {
                     </a>
                   </Td>
                   <Td>{tab.tab_name}{tab.sub_department && <span className="block text-xs text-ink-soft">→ {tab.sub_department}</span>}</Td>
-                  <Td><Badge tone={tab.data_kind === "doctors" ? "brand" : tab.data_kind === "feedback" ? "sky" : "neutral"}>{tab.data_kind === "ignore" ? "Not synced" : tab.data_kind}</Badge></Td>
+                  <Td><Badge tone={tab.data_kind === "doctors" ? "brand" : tab.data_kind === "feedback" ? "sky" : tab.data_kind === "templates" ? "violet" : "neutral"}>{tab.data_kind === "ignore" ? "Not synced" : tab.data_kind}</Badge></Td>
                   <Td className="text-right tabular-nums">{tab.data_kind === "ignore" ? "—" : number(tab.record_count)}</Td>
                   <Td className="whitespace-nowrap text-xs">{formatDateTime(tab.last_synced_at)}</Td>
                   <Td>
@@ -208,6 +231,7 @@ export default function GoogleSheetsPage() {
       </Card>
 
       {editing && <EditTab tab={editing} onClose={() => setEditing(null)} />}
+      {editingSource && <EditingSetup source={editingSource} onClose={() => setEditingSource(null)} />}
     </div>
   );
 }
@@ -265,7 +289,7 @@ function EditTab({ tab, onClose }: { tab: SheetTab; onClose: () => void }) {
         <div>
           <Label>Data in this tab</Label>
           <Select value={form.data_kind} onChange={(e) => setForm({ ...form, data_kind: e.target.value as SheetTab["data_kind"] })}>
-            <option value="doctors">Doctors</option><option value="feedback">Patient feedback</option><option value="ignore">Not synced</option>
+            <option value="doctors">Doctors</option><option value="feedback">Patient feedback</option><option value="templates">Email templates</option><option value="ignore">Not synced</option>
           </Select>
         </div>
         <div>
@@ -291,6 +315,73 @@ function EditTab({ tab, onClose }: { tab: SheetTab; onClose: () => void }) {
           </p>
         </div>
       </div>
+    </Dialog>
+  );
+}
+
+type EditingInfo = { connected: boolean; url: string | null; tabs: string[]; script: string };
+
+function EditingSetup({ source, onClose }: { source: SheetSource; onClose: () => void }) {
+  const qc = useQueryClient();
+  const info = useQuery({ queryKey: ["editing", source.id], queryFn: () => api.get<EditingInfo>(`/google-sheets/sources/${source.id}/editing`) });
+  const [url, setUrl] = React.useState("");
+  React.useEffect(() => { if (info.data?.url) setUrl(info.data.url); }, [info.data?.url]);
+  const connect = useMutation({
+    mutationFn: () => api.put<{ spreadsheet_name: string }>(`/google-sheets/sources/${source.id}/editing`, { url }),
+    onSuccess: (r) => {
+      toast.success(`Connected to “${r.spreadsheet_name}”. Templates can now be edited from the dashboard.`);
+      qc.invalidateQueries();
+      onClose();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Connection failed"),
+  });
+  const disconnect = useMutation({
+    mutationFn: () => api.del(`/google-sheets/sources/${source.id}/editing`),
+    onSuccess: () => { toast.success("Disconnected. Delete the web app deployment in Apps Script too."); qc.invalidateQueries(); onClose(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const copy = async () => {
+    if (!info.data) return;
+    await navigator.clipboard.writeText(info.data.script);
+    toast.success("Script copied");
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} wide title={`Edit templates from the dashboard: ${source.name}`}
+      description="Adds a small Apps Script to this spreadsheet. It can change only the template tabs listed in it, and only with the secret token it contains."
+      footer={<>
+        {info.data?.connected && <Button variant="outline" className="mr-auto" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>Disconnect</Button>}
+        <Button variant="outline" onClick={onClose}>Close</Button>
+        <Button onClick={() => connect.mutate()} disabled={connect.isPending || !url.trim()}>{connect.isPending ? "Testing…" : "Test and connect"}</Button>
+      </>}>
+      {info.isLoading ? <Skeleton className="h-40" /> : info.error ? <ErrorState error={info.error} /> : info.data && (
+        <ol className="space-y-4 text-sm text-ink">
+          <li>
+            <p className="font-medium">1. Open the sheet&apos;s script editor</p>
+            <p className="text-xs text-ink-soft">
+              Open <a className="font-medium text-brand-700 underline" target="_blank" rel="noreferrer" href={`https://docs.google.com/spreadsheets/d/${source.spreadsheet_id}/edit`}>{source.name}</a> → Extensions → Apps Script.
+              Click <b>+</b> next to Files → Script, name it <code>IkrisDashboard</code>.
+            </p>
+          </li>
+          <li>
+            <div className="flex items-center justify-between">
+              <p className="font-medium">2. Paste this code and press Save</p>
+              <Button size="sm" variant="outline" onClick={copy}><Copy className="h-3.5 w-3.5" /> Copy code</Button>
+            </div>
+            <pre className="mt-1.5 max-h-48 overflow-auto rounded-md bg-slate-900 p-3 font-mono text-[10.5px] leading-relaxed text-slate-100">{info.data.script}</pre>
+          </li>
+          <li>
+            <p className="font-medium">3. Deploy it as a web app</p>
+            <p className="text-xs text-ink-soft">
+              Deploy → New deployment → gear icon → <b>Web app</b>. Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Click Deploy and allow access when Google asks.
+              Copy the <b>Web app URL</b> (it ends with <code>/exec</code>).
+            </p>
+          </li>
+          <li>
+            <p className="font-medium">4. Paste the Web app URL</p>
+            <Input className="mt-1.5" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/…/exec" />
+          </li>
+        </ol>
+      )}
     </Dialog>
   );
 }

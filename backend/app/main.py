@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import core, doctors, google_sheets
+from .api import calendar, core, doctors, google_sheets, templates
 from .core.config import get_settings
 from .core.security import client_ip, rate_limiter
 from .core.supabase import ServiceUnavailable, SupabaseError
@@ -71,5 +71,7 @@ async def health():
 app.include_router(core.router)
 app.include_router(doctors.router)
 app.include_router(google_sheets.router)
+app.include_router(templates.router)
+app.include_router(calendar.router)
 
 _ = HTTPException

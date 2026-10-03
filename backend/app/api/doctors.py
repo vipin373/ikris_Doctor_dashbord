@@ -5,8 +5,11 @@ import io
 import re
 from typing import Any
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from ..core.config import get_settings
 from ..core.security import CurrentUser, get_current_user
@@ -209,6 +212,26 @@ async def get_doctor(doctor_id: str, user: CurrentUser = Depends(get_current_use
     for s in sources:
         s["source_name"] = names.get(s["spreadsheet_id"])
     return {"doctor": doctor, "sources": sources, "events": events}
+
+
+class DatesUpdate(BaseModel):
+    date_of_birth: date | None = None
+    date_of_anniversary: date | None = None
+
+
+@router.put("/{doctor_id}/dates")
+async def update_dates(doctor_id: str, body: DatesUpdate, request: Request, user: CurrentUser = Depends(get_current_user)):
+    """Birthday / anniversary entered in the dashboard. Kept across syncs
+    unless the Google Sheet supplies its own value."""
+    if not re.fullmatch(r"[0-9a-f-]{36}", doctor_id):
+        raise HTTPException(400, "Invalid doctor id")
+    await user.db().rpc("set_doctor_dates", {
+        "p_doctor": doctor_id,
+        "p_dob": body.date_of_birth.isoformat() if body.date_of_birth else None,
+        "p_anniversary": body.date_of_anniversary.isoformat() if body.date_of_anniversary else None,
+    })
+    await audit("Doctor updated", user, "doctor", doctor_id, {"fields": ["date_of_birth", "date_of_anniversary"]}, request)
+    return {"ok": True}
 
 
 async def _source_names(spreadsheet_ids: list[str], user: CurrentUser) -> dict[str, str]:

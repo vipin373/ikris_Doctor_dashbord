@@ -57,6 +57,7 @@ export const api = {
     (await request(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) })).json(),
   put: async <T>(path: string, body: unknown): Promise<T> =>
     (await request(path, { method: "PUT", body: JSON.stringify(body) })).json(),
+  del: async <T>(path: string): Promise<T> => (await request(path, { method: "DELETE" })).json(),
   download: async (path: string, params: Query, filename: string): Promise<void> => {
     const res = await request(path + qs(params));
     const blob = await res.blob();

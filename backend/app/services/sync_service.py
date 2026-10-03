@@ -19,7 +19,7 @@ from ..core.supabase import PostgREST, ServiceUnavailable, SupabaseError
 from .google_sheets_service import SheetReadError, discover_tabs, read_tab
 from .mapping import (
     DOCTOR_FIELDS, TabContext, TabResult, build_headers, detect_kind, map_doctor_tab, map_feedback_tab,
-    merge_doctors,
+    map_template_tab, merge_doctors,
 )
 
 FEEDBACK_FIELDS = [
@@ -113,6 +113,7 @@ async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> di
 
         doctor_results: list[tuple[TabContext, TabResult]] = []
         feedback_results: list[tuple[TabContext, TabResult]] = []
+        template_results: list[tuple[dict, dict, list[dict]]] = []
         reports: list[dict[str, Any]] = []
         for tab in tabs:
             src = source_by_id.get(tab["source_id"])
@@ -130,6 +131,13 @@ async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> di
                     sub_department=tab.get("sub_department"), specialty=tab.get("specialty"),
                     mapping=mapping, header_row=int(mapping.get("header_row", 1)),
                 )
+                if tab["data_kind"] == "templates":
+                    templates = map_template_tab(ctx, values)
+                    template_results.append((src, tab, templates))
+                    report["rows"] = len(templates)
+                    report["headers"] = build_headers(values[0], len(values[0])) if values else []
+                    reports.append(report)
+                    continue
                 if tab["data_kind"] == "doctors":
                     res = map_doctor_tab(ctx, values)
                     doctor_results.append((ctx, res))
@@ -141,7 +149,7 @@ async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> di
                 report["headers"] = res.headers
                 report["errors"] = res.errors[:50]
                 report["ctx"] = ctx
-            except SheetReadError as exc:
+            except (SheetReadError, ValueError, KeyError) as exc:
                 report.update(status="Failed", error=str(exc))
             reports.append(report)
 
@@ -254,6 +262,26 @@ async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> di
             for batch in _chunks(fb_rows, 300):
                 await db.insert("patient_feedback", batch, on_conflict="source_key", resolution="merge-duplicates")
 
+        # Email templates: mirror the sheet (templates hold no history, so rows
+        # that disappeared from the sheet are removed).
+        templates_written = 0
+        for src, tab, templates in template_results:
+            dept = tab.get("department_code") or src.get("default_department")
+            if dept not in ("NPP", "RARE_DISEASES"):
+                continue
+            rows = [{
+                **t, "department": dept, "source_id": src["id"], "tab_id": tab["id"], "source_name": src["name"],
+                "spreadsheet_id": src["spreadsheet_id"], "sheet_name": tab["tab_name"], "sheet_gid": tab.get("sheet_gid"),
+                "last_synced_at": now,
+            } for t in templates]
+            if rows:
+                await db.insert("email_templates", rows, on_conflict="spreadsheet_id,sheet_name,source_ref",
+                                resolution="merge-duplicates")
+            refs = ",".join('"' + t["source_ref"].replace('"', "") + '"' for t in templates)
+            stale = [("tab_id", f"eq.{tab['id']}")] + ([("source_ref", f"not.in.({refs})")] if refs else [])
+            await db.delete("email_templates", stale)
+            templates_written += len(rows)
+
         for rep in reports:
             await db.update("google_sheet_tabs", [("id", f"eq.{rep['tab_id']}")], {
                 "headers": rep["headers"], "record_count": rep["rows"], "last_synced_at": now,
@@ -275,6 +303,7 @@ async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> di
             "new_events": new_events,
             "doctors": {"new": len(new_docs), "updated": len(changed_docs), "total_in_sheets": len(merged)},
             "feedback": {"new": fb_new, "updated": fb_updated},
+            "templates": templates_written,
             "tabs": [{k: v for k, v in r.items() if k not in ("ctx", "headers")} for r in reports],
             "steps": steps,
         }

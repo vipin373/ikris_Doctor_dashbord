@@ -3,10 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input, Label, Select } from "@/components/ui/input";
+import { Dialog } from "@/components/ui/misc";
 import {
   AlertTriangle, ArrowLeft, Building2, CalendarDays, ChevronDown, ChevronRight, FileSpreadsheet, Mail, MapPin,
-  MessageCircle, Phone, Send, UserRound,
+  MessageCircle, Pencil, Phone, Send, UserRound,
 } from "lucide-react";
 import { Badge, departmentTone, statusTone } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -189,15 +193,7 @@ export default function DoctorProfilePage() {
             </CardBody>
           </Card>
 
-          <Card>
-            <CardHeader title="Important dates" />
-            <CardBody>
-              <dl className="grid grid-cols-2 gap-4">
-                <Field label="Birthday" value={d.date_of_birth && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5 text-ink-soft" />{formatDayMonth(d.date_of_birth)}</span>} />
-                <Field label="Anniversary" value={d.date_of_anniversary && formatDayMonth(d.date_of_anniversary)} />
-              </dl>
-            </CardBody>
-          </Card>
+          <ImportantDates doctor={d} />
 
           <Card>
             <CardHeader title="Engagement" description="Measured from recorded activity" />
@@ -261,5 +257,86 @@ function SourceCard({ source: s, department }: { source: SourceRow; department: 
         </div>
       )}
     </div>
+  );
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function splitDate(value: string | null) {
+  if (!value) return { day: "", month: "", year: "" };
+  const [y, m, dd] = value.split("-");
+  return { day: String(Number(dd)), month: String(Number(m)), year: y === "1904" ? "" : y };
+}
+
+function joinDate(p: { day: string; month: string; year: string }): string | null {
+  if (!p.day || !p.month) return null;
+  const y = p.year ? p.year.padStart(4, "0") : "1904";
+  return `${y}-${p.month.padStart(2, "0")}-${p.day.padStart(2, "0")}`;
+}
+
+function dateLabel(value: string | null): string | null {
+  if (!value) return null;
+  const { year } = splitDate(value);
+  return year ? `${formatDayMonth(value)} ${year}` : formatDayMonth(value);
+}
+
+type DateParts = ReturnType<typeof splitDate>;
+
+function DatePicker({ value, onChange, label }: { value: DateParts; onChange: (v: DateParts) => void; label: string }) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="grid grid-cols-3 gap-2">
+        <Select value={value.day} onChange={(e) => onChange({ ...value, day: e.target.value })}>
+          <option value="">Day</option>
+          {Array.from({ length: 31 }, (_, i) => <option key={i} value={String(i + 1)}>{i + 1}</option>)}
+        </Select>
+        <Select value={value.month} onChange={(e) => onChange({ ...value, month: e.target.value })}>
+          <option value="">Month</option>
+          {MONTHS.map((m, i) => <option key={m} value={String(i + 1)}>{m}</option>)}
+        </Select>
+        <Input value={value.year} inputMode="numeric" maxLength={4} placeholder="Year (optional)"
+          onChange={(e) => onChange({ ...value, year: e.target.value.replace(/\D/g, "") })} />
+      </div>
+    </div>
+  );
+}
+
+function ImportantDates({ doctor: d }: { doctor: Doctor }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = React.useState(false);
+  const [dob, setDob] = React.useState(splitDate(d.date_of_birth));
+  const [ann, setAnn] = React.useState(splitDate(d.date_of_anniversary));
+  const save = useMutation({
+    mutationFn: () => api.put(`/doctors/${d.id}/dates`, { date_of_birth: joinDate(dob), date_of_anniversary: joinDate(ann) }),
+    onSuccess: () => {
+      toast.success("Dates saved");
+      qc.invalidateQueries({ queryKey: ["doctor", d.id] });
+      qc.invalidateQueries({ queryKey: ["upcoming-dates"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+      setOpen(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save"),
+  });
+  const manual = d.manual_fields ?? {};
+  return (
+    <Card>
+      <CardHeader title="Important dates" action={<Button size="sm" variant="ghost" onClick={() => { setDob(splitDate(d.date_of_birth)); setAnn(splitDate(d.date_of_anniversary)); setOpen(true); }}><Pencil className="h-3.5 w-3.5" /> Edit</Button>} />
+      <CardBody>
+        <dl className="grid grid-cols-2 gap-4">
+          <Field label="Birthday" value={d.date_of_birth && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5 text-ink-soft" />{dateLabel(d.date_of_birth)}</span>} />
+          <Field label="Anniversary" value={dateLabel(d.date_of_anniversary)} />
+        </dl>
+        {(manual.date_of_birth || manual.date_of_anniversary) && <p className="mt-3 text-[11px] text-ink-soft">Entered in the dashboard.</p>}
+      </CardBody>
+      <Dialog open={open} onOpenChange={setOpen} title="Important dates" description="Shown on the Calendar and in upcoming birthdays. If the Google Sheet later gets a date for this doctor, the sheet value is used."
+        footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={() => save.mutate()} disabled={save.isPending}>Save</Button></>}>
+        <div className="space-y-4">
+          <DatePicker label="Date of birth" value={dob} onChange={setDob} />
+          <DatePicker label="Date of anniversary" value={ann} onChange={setAnn} />
+          <p className="text-[11px] text-ink-soft">Leave day and month empty to clear a date. The year is optional.</p>
+        </div>
+      </Dialog>
+    </Card>
   );
 }

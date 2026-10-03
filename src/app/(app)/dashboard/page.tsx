@@ -75,8 +75,10 @@ export default function DashboardPage() {
             <StatCard label="Replies received" value={number(data.replies)} icon={Mail} hint="Reply tracking starts in phase 2" />
             <StatCard label="Patient feedback requests" value={number(data.feedback_total)} icon={MessageSquareHeart} tone="sky"
               hint={feedback.map((f) => `${f.name} ${f.value}`).join(" · ")} />
-            <StatCard label="Upcoming birthdays (30 days)" value={number(data.upcoming_birthdays)} icon={Cake} tone="amber"
-              hint="Date of Birth is not in the current sheets" />
+            <Link href="/calendar" className="block">
+              <StatCard label="Upcoming birthdays (30 days)" value={number(data.upcoming_birthdays)} icon={Cake} tone="amber"
+                hint={data.upcoming_birthdays ? "Open the calendar →" : "Add birthdays: see Calendar & Birthdays →"} />
+            </Link>
           </div>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-2">

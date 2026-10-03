@@ -6,8 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
-  Activity, BarChart3, ChevronDown, Dna, FileSpreadsheet, HeartPulse, LayoutDashboard, LogOut, Menu,
-  MessageSquareHeart, Search, Shield, Stethoscope, Users, X,
+  Activity, BarChart3, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
+  Menu, MessageSquareHeart, Search, Shield, Stethoscope, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { api } from "@/lib/api";
@@ -41,7 +41,11 @@ function useNav(): NavItem[] {
   if (me.departments.includes("RARE_DISEASES")) {
     items.push({ href: "/rare-diseases", label: "Rare Diseases", icon: Dna, children: subs("RARE_DISEASES") });
   }
-  items.push({ href: "/feedback", label: "Patient Feedback", icon: MessageSquareHeart });
+  items.push(
+    { href: "/templates", label: "Email Templates", icon: FileText },
+    { href: "/calendar", label: "Calendar & Birthdays", icon: CalendarDays },
+    { href: "/feedback", label: "Patient Feedback", icon: MessageSquareHeart },
+  );
   if (me.role === "ADMIN") {
     items.push(
       { href: "/google-sheets", label: "Google Sheets", icon: FileSpreadsheet },
@@ -52,7 +56,7 @@ function useNav(): NavItem[] {
   return items;
 }
 
-const UPCOMING = ["Communications", "Campaigns", "Birthdays", "Analytics"];
+const UPCOMING = ["Communications", "Campaigns", "Analytics"];
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();

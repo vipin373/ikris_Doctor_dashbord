@@ -136,6 +136,11 @@ class PostgREST:
         return resp.json() if returning else []
 
 
+    async def delete(self, table: str, filters: list[tuple[str, str]]) -> None:
+        resp = await http().delete(f"{self.base}/{table}", params=filters, headers={**self.headers, "Prefer": "return=minimal"})
+        self._raise(resp)
+
+
 async def auth_get_user(token: str) -> dict[str, Any] | None:
     s = get_settings()
     resp = await http().get(

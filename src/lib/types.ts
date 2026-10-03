@@ -42,6 +42,7 @@ export interface Doctor extends DoctorRow {
   email_norm: string | null;
   phone_norm: string | null;
   extra: Record<string, string>;
+  manual_fields: Record<string, boolean>;
   source_spreadsheet_id: string | null;
   source_sheet_name: string | null;
   source_row_number: number | null;
@@ -139,7 +140,7 @@ export interface SheetTab {
   source_id: number;
   tab_name: string;
   sheet_gid: number | null;
-  data_kind: "doctors" | "feedback" | "ignore";
+  data_kind: "doctors" | "feedback" | "templates" | "ignore";
   department_code: Department | null;
   sub_department: string | null;
   specialty: string | null;
@@ -159,6 +160,7 @@ export interface SheetSource {
   default_department: Department | null;
   description: string | null;
   is_active: boolean;
+  write_bridge_url: string | null;
   tabs: SheetTab[];
 }
 
@@ -209,4 +211,71 @@ export interface AuditLog {
   details: Record<string, unknown>;
   ip: string | null;
   created_at: string;
+}
+
+export interface EmailTemplate {
+  id: string;
+  department: Department;
+  source_id: number | null;
+  tab_id: number | null;
+  source_name: string | null;
+  spreadsheet_id: string;
+  sheet_name: string;
+  sheet_gid: number | null;
+  source_ref: string;
+  kind: "email" | "campaign" | "subject_line";
+  name: string;
+  campaign: string | null;
+  specialty: string | null;
+  subject: string | null;
+  body_html: string | null;
+  is_active: boolean | null;
+  notes: string | null;
+  subject_cell: string | null;
+  body_cell: string | null;
+  active_cell: string | null;
+  sort_order: number;
+  last_synced_at: string | null;
+  updated_at: string;
+  updated_by_email: string | null;
+  editable?: boolean;
+}
+
+export interface CalendarPerson {
+  date: string;
+  kind: "birthday" | "anniversary";
+  doctor_id: string;
+  doctor_name: string;
+  department: Department;
+  sub_department: string | null;
+  year: number | null;
+}
+
+export interface CalendarData {
+  month: string;
+  dates: CalendarPerson[];
+  outreach: { date: string; department: Department; channel: string; campaign: string; status: string; count: number }[];
+  feedback: { date: string; department: Department; status: string; count: number }[];
+  schedule: { date: string; name: string; department: Department; time: string | null; note: string | null }[];
+}
+
+export interface UpcomingDate {
+  doctor_id: string;
+  doctor_name: string;
+  department: Department;
+  sub_department: string | null;
+  institute: string | null;
+  email: string | null;
+  contact_number: string | null;
+  kind: "birthday" | "anniversary";
+  next_date: string;
+  days_until: number;
+}
+
+export interface ScheduleItem {
+  name: string;
+  department: Department;
+  days: number[];
+  time: string | null;
+  note: string | null;
 }

@@ -15,6 +15,16 @@ Base path `/api`. Every endpoint except `/api/health` and `/api/cron/sync` needs
 | GET | `/feedback` | any | Patient feedback list |
 | GET | `/feedback/summary` | any | Feedback analytics |
 | GET | `/departments` | any | Departments visible to the caller |
+| PUT | `/doctors/{id}/dates` | any (own department) | Set date of birth / anniversary `{date_of_birth, date_of_anniversary}` |
+| GET | `/templates` | any | Email templates of the caller's departments, with `editable` per spreadsheet |
+| GET | `/templates/{id}` | any | One template |
+| PUT | `/templates/{id}` | any (own department) | Update `subject`, `body_html`, `is_active`; written to the Google Sheet first |
+| POST | `/templates/subject-lines` | any (own department) | Add a subject line `{tab_id, subject}` |
+| DELETE | `/templates/{id}` | any (own department) | Delete a subject line (row removed from the sheet) |
+| GET | `/calendar?month=YYYY-MM` | any | Birthdays, anniversaries, outreach per day, feedback per day, scheduled runs |
+| GET | `/calendar/upcoming?days=30` | any | Upcoming birthdays and anniversaries |
+| GET / PUT | `/calendar/schedule` | any / Admin | Automation schedule shown on the calendar |
+| GET / PUT / DELETE | `/google-sheets/sources/{id}/editing` | Admin | Template editing bridge: script, connect (tests the URL), disconnect |
 | GET | `/google-sheets` | Admin | Connections and tabs |
 | POST | `/google-sheets/sync` | Admin | Sync Now |
 | GET | `/google-sheets/sync-history` | Admin | Last 30 syncs |

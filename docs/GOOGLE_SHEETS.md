@@ -51,3 +51,32 @@ Any other column is stored in `doctors.extra` and shown on the profile, so new c
 1. Insert a row in `google_sheet_sources` (name, spreadsheet id, default department) or ask Claude to add it.
 2. With a service account configured, press Sync Now: every tab (Geneticist, Nephro, Neuro, Hepato, …) is discovered, recognised as doctors, mapped to the department and the tab name becomes the sub-department.
 3. Without a service account, add each tab with its gid in the Sync Center.
+
+## Email templates
+
+Tabs with data kind **templates** are read on every sync into `email_templates` and shown on the **Email Templates** page. Layouts (`mapping.layout`):
+
+| Layout | Used for | Mapping keys |
+|---|---|---|
+| `cells` | `Email Template 1…5` (subject in B1, HTML body in B2) | `subject_cell`, `body_cell`, `notes_cells` |
+| `rows` | MSL ALL INDIA `Campaigns` (one template per row) | `columns`: campaign, specialty, subject, body, active |
+| `subject_list` | `Subject Lines` rotation | `column`, `start_row`, `info_cells` |
+
+Template text is stored exactly as written (HTML, line breaks, leading spaces).
+
+### Editing templates from the dashboard
+
+Edits are written straight into the Google Sheet, so the existing Apps Script automations pick them up on their next run. The dashboard writes through a small Apps Script web app added to each spreadsheet (the "editing bridge"):
+
+1. Admin → Google Sheets Sync Center → **Edit templates from the dashboard → Set up**.
+2. Copy the generated script into the spreadsheet (Extensions → Apps Script → new file), save.
+3. Deploy → New deployment → Web app, Execute as **Me**, access **Anyone**; copy the `/exec` URL.
+4. Paste the URL and press **Test and connect**.
+
+The script contains a random token and the list of template tabs; it rejects requests without the token and refuses any other tab. Disconnect removes the token from the app; also delete the deployment in Apps Script.
+
+Who can edit: Admins, and NPP / Rare Disease users for their own department's templates. Every change is audit-logged.
+
+## Birthdays and anniversaries
+
+Add columns named **Date of Birth** and **Date of Anniversary** to any doctor sheet; they are read on the next sync. Accepted forms include `15-Aug-1975`, `15/08/1975`, `1975-08-15` and year-less `15-Aug`. Dates can also be entered on a doctor's profile; those are kept across syncs unless the sheet provides a value.
