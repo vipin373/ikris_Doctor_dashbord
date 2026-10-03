@@ -25,6 +25,7 @@ async def list_connections(user: CurrentUser = Depends(require_admin)):
         "sources": [{**src, "tabs": [t for t in tabs if t["source_id"] == src["id"]]} for src in sources],
         "google_service_account": s.google_client_email or None,
         "service_role_configured": s.has_service_role,
+        "scheduled_sync_available": s.has_service_role and bool(s.cron_secret),
     }
 
 

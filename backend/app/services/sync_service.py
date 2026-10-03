@@ -15,7 +15,7 @@ from typing import Any
 
 from ..core.config import get_settings
 from ..core.security import CurrentUser
-from ..core.supabase import PostgREST, SupabaseError
+from ..core.supabase import PostgREST, ServiceUnavailable, SupabaseError
 from .google_sheets_service import SheetReadError, discover_tabs, read_tab
 from .mapping import (
     DOCTOR_FIELDS, TabContext, TabResult, build_headers, detect_kind, map_doctor_tab, map_feedback_tab,
@@ -85,8 +85,18 @@ async def _discover(db: PostgREST, sources: list[dict], tabs: list[dict], steps:
     return discovered
 
 
+def _sync_db(user: CurrentUser | None) -> PostgREST:
+    """Service role when configured; otherwise the Admin's own session
+    (RLS allows Admins to write the sync tables)."""
+    if get_settings().has_service_role:
+        return PostgREST.service()
+    if user and user.is_admin:
+        return user.db()
+    raise ServiceUnavailable("Scheduled sync needs SUPABASE_SERVICE_ROLE_KEY on the server. Use 'Sync now' instead.")
+
+
 async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> dict[str, Any]:
-    db = PostgREST.service()
+    db = _sync_db(user)
     started = _now()
     steps: list[str] = ["Reading Google Sheet connections..."]
     log_rows = await db.insert("google_sheet_sync_logs", {

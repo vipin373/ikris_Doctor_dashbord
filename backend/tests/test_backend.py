@@ -247,7 +247,7 @@ class MemoryDB:
 def test_sync_is_incremental_and_never_deletes(monkeypatch):
     db = MemoryDB()
     sheet = [list(r) for r in NPP_SHEET]
-    monkeypatch.setattr(sync_service.PostgREST, "service", staticmethod(lambda: db))
+    monkeypatch.setattr(sync_service, "_sync_db", lambda user: db)
 
     async def fake_read(*a, **k):
         return sheet
@@ -271,6 +271,15 @@ def test_sync_is_incremental_and_never_deletes(monkeypatch):
     assert third["doctors"]["updated"] == 1
     assert len(db.tables["doctors"]) == 3      # nothing deleted
     assert third["flagged_missing"] >= 1
+
+
+def test_sync_needs_admin_or_service_key(monkeypatch):
+    from app.core.supabase import ServiceUnavailable
+    with pytest.raises(ServiceUnavailable):
+        sync_service._sync_db(None)
+    with pytest.raises(ServiceUnavailable):
+        sync_service._sync_db(user("NPP"))
+    assert sync_service._sync_db(user("ADMIN")) is not None
 
 
 _ = mapping

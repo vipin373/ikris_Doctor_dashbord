@@ -14,7 +14,12 @@ import { api } from "@/lib/api";
 import type { SheetSource, SheetTab, SyncLog, SyncResult } from "@/lib/types";
 import { cn, DEPARTMENT_LABEL, formatDateTime, number } from "@/lib/utils";
 
-type Connections = { sources: SheetSource[]; google_service_account: string | null; service_role_configured: boolean };
+type Connections = {
+  sources: SheetSource[];
+  google_service_account: string | null;
+  service_role_configured: boolean;
+  scheduled_sync_available: boolean;
+};
 
 const STEPS = [
   "Reading Google Sheets…", "Reading tabs…", "Processing records…", "Checking duplicates…",
@@ -71,16 +76,16 @@ export default function GoogleSheetsPage() {
         title="Google Sheets Sync Center"
         description="Google Sheets stay your working source. Sync copies them into the platform one way: new rows are added, changed rows updated, nothing is deleted."
         actions={
-          <Button onClick={() => sync.mutate()} disabled={sync.isPending || !conn.data?.service_role_configured}>
+          <Button onClick={() => sync.mutate()} disabled={sync.isPending || !conn.data}>
             {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Sync now
           </Button>
         }
       />
 
-      {conn.data && !conn.data.service_role_configured && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          Sync is disabled: <b>SUPABASE_SERVICE_ROLE_KEY</b> is not set on the server. Add it in Vercel → Project → Settings → Environment Variables and redeploy.
+      {conn.data && !conn.data.scheduled_sync_available && (
+        <div className="mb-4 rounded-lg border border-line bg-white px-4 py-3 text-sm text-ink-muted">
+          Use <b>Sync now</b> to refresh data. The automatic daily sync starts once <code>SUPABASE_SERVICE_ROLE_KEY</code> is added in Vercel → Settings → Environment Variables.
         </div>
       )}
       {publicTabs.length > 0 && (

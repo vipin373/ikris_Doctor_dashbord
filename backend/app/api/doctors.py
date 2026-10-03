@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from ..core.config import get_settings
 from ..core.security import CurrentUser, get_current_user
 from ..core.supabase import PostgREST, ServiceUnavailable, SupabaseError
 from ..services.audit import audit
@@ -204,20 +205,21 @@ async def get_doctor(doctor_id: str, user: CurrentUser = Depends(get_current_use
         "select": "id,channel,direction,event_type,status,subject,detail,campaign,occurred_at,source",
         "order": "occurred_at.desc.nullslast,id.desc",
     })
-    names = await _source_names([s["spreadsheet_id"] for s in sources])
+    names = await _source_names([s["spreadsheet_id"] for s in sources], user)
     for s in sources:
         s["source_name"] = names.get(s["spreadsheet_id"])
     return {"doctor": doctor, "sources": sources, "events": events}
 
 
-async def _source_names(spreadsheet_ids: list[str]) -> dict[str, str]:
+async def _source_names(spreadsheet_ids: list[str], user: CurrentUser) -> dict[str, str]:
     """Spreadsheet display names. Read with the service role because the
     connection table is Admin-only, and only the name is returned."""
     ids = sorted(set(spreadsheet_ids))
     if not ids:
         return {}
     try:
-        rows, _ = await PostgREST.service().select(
+        db = PostgREST.service() if get_settings().has_service_role else user.db()
+        rows, _ = await db.select(
             "google_sheet_sources", {"spreadsheet_id": f"in.({','.join(ids)})", "select": "spreadsheet_id,name"}
         )
     except (ServiceUnavailable, SupabaseError):
