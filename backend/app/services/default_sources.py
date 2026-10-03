@@ -116,4 +116,26 @@ DEFAULT_SOURCES = [
             {"tab_name": "Sheet2", "data_kind": "ignore", "is_enabled": False, "mapping": {}},
         ],
     },
+    {
+        "name": "Birthday & Anniversary Email Automation",
+        "spreadsheet_id": "1A0tPJDI1983I_QcVcwNnVMVsRJkDA8ptGoSnK8UJ_iI",
+        "default_department": "NPP",
+        "description": "Doctor birthdays and anniversaries used by the wishes email automation.",
+        "tabs": [
+            {
+                "tab_name": "Sheet1",
+                "data_kind": "doctors",
+                "department_code": "NPP",
+                "is_enabled": True,
+                "mapping": {
+                    "access_mode": "public_link",
+                    "date_formats": ["%d-%b"],
+                    "events": [{
+                        "channel": "EMAIL", "event_type": "Birthday / anniversary email",
+                        "campaign": "Birthday & anniversary wishes", "status_column": "Status",
+                    }],
+                },
+            },
+        ],
+    },
 ]

@@ -122,12 +122,19 @@ def norm_name(value: str | None) -> str | None:
 
 
 def norm_email(value: str | None) -> tuple[str | None, str | None]:
-    """Returns (normalised email, issue code)."""
+    """Returns (normalised email, issue code). A cell holding several
+    addresses ("a@x.com, b@y.com" or "a@x.com/b@y.com") uses the first
+    valid one."""
     if not value:
         return None, None
     text = value.strip().lower().rstrip(",;. ")
     if EMAIL_RE.match(text):
         return text, None
+    parts = [p.strip().rstrip(".") for p in re.split(r"[,;/]+", text) if p.strip()]
+    if len(parts) > 1:
+        valid = [p for p in parts if EMAIL_RE.match(p)]
+        if valid:
+            return valid[0], "email_multiple"
     return None, "email_invalid"
 
 
@@ -153,6 +160,10 @@ def parse_date(value: str | None, formats: list[str]) -> datetime | None:
     if not value:
         return None
     text = value.strip()
+    # Hand-typed dates: "10 - Aug", "11- Aug", "1st May", "17-July"
+    text = re.sub(r"\s*([-/.])\s*", r"\1", text)
+    text = re.sub(r"\b(\d{1,2})(st|nd|rd|th)\b", r"\1", text, flags=re.I)
+    text = re.sub(r"\s+", " ", text)
     for fmt in formats:
         try:
             if "%Y" not in fmt:
@@ -168,7 +179,10 @@ def parse_date(value: str | None, formats: list[str]) -> datetime | None:
 def _person_date_formats(tab_formats: list[str]) -> list[str]:
     """Birthdays are usually typed by hand: tab formats first, then day-first
     and written-month forms. Year-less values (e.g. "15-Aug") get year 1904."""
-    extra = DEFAULT_DATE_FORMATS + ["%d-%b-%Y", "%d %B %Y", "%d %b %Y", "%d-%B-%Y", "%d.%m.%Y", "%d-%b", "%d %B", "%d %b"]
+    extra = DEFAULT_DATE_FORMATS + [
+        "%d-%b-%Y", "%d %B %Y", "%d %b %Y", "%d-%B-%Y", "%d.%m.%Y",
+        "%d-%b", "%d-%B", "%d %B", "%d %b", "%b-%d", "%B %d", "%b %d",
+    ]
     out: list[str] = []
     for f in tab_formats + extra:
         if f not in out:

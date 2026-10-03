@@ -332,6 +332,25 @@ def test_birthday_formats():
     assert parse_date("21-09-2026", ["%d-%m-%Y"]).day == 21
 
 
+def test_birthday_sheet_forms_and_multi_email():
+    sheet = [["Doctor Name", "Email", "DOB", "Date of Anniversary", "Status "],
+             ["VIPIN ", "a@example.com", "10 - Aug", "", "done"],
+             ["Abhay", "b@example.com,infoexample.net", "11- Aug", "1st May", ""],
+             ["Jyoti", "c@example.com/d@example.com", "23 Dec", "24-Jine", ""],
+             ["Vashith", "x@example.com", "17-July", "", ""],
+             ["Bad", "Devavrat. arya@example.com", "", "", ""]]
+    m = {"date_formats": ["%d-%b"], "events": [{"event_type": "Birthday email", "status_column": "Status"}]}
+    res = map_doctor_tab(ctx("NPP", m, "Sheet1"), sheet)
+    vipin, abhay, jyoti, vashith, bad = res.doctors
+    assert vipin.fields["date_of_birth"] == "1904-08-10" and vipin.events[0]["status"] == "Sent"
+    assert abhay.fields["date_of_birth"] == "1904-08-11" and abhay.fields["date_of_anniversary"] == "1904-05-01"
+    assert abhay.dedupe_key == "e:b@example.com" and "email_multiple" in abhay.issues
+    assert jyoti.dedupe_key == "e:c@example.com" and jyoti.fields["date_of_birth"] == "1904-12-23"
+    assert "date_of_anniversary_invalid" in jyoti.issues            # "24-Jine" typo
+    assert vashith.fields["date_of_birth"] == "1904-07-17"
+    assert bad.fields["email_norm"] is None and "email_invalid" in bad.issues
+
+
 def test_bridge_script_and_url():
     script = sheet_bridge.render_script("sheet-id", "Demo", "tok", ["Email Template 1", "Subject Lines"])
     assert "var IKRIS_TOKEN = 'tok';" in script and "['Email Template 1', 'Subject Lines']" in script

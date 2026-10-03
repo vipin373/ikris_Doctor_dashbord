@@ -42,6 +42,7 @@ export const DEPARTMENT_LABEL: Record<string, string> = {
 
 export const ISSUE_LABEL: Record<string, string> = {
   email_invalid: "Invalid email in sheet",
+  email_multiple: "Several emails in one cell (first one used)",
   phone_lost_in_sheet: "Phone number lost in sheet (shown as 9.9E+09)",
   phone_invalid: "Invalid phone number",
   whatsapp_invalid: "Invalid WhatsApp number",
