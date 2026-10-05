@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
-  Activity, BarChart3, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
+  Activity, BarChart3, Briefcase, Cake, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
   Menu, MessageSquareHeart, Search, Shield, Stethoscope, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
@@ -43,7 +43,9 @@ function useNav(): NavItem[] {
   }
   items.push(
     { href: "/templates", label: "Email Templates", icon: FileText },
-    { href: "/calendar", label: "Calendar & Birthdays", icon: CalendarDays },
+    { href: "/calendar", label: "Calendar", icon: CalendarDays },
+    { href: "/birthdays", label: "Birthdays", icon: Cake },
+    { href: "/anniversaries", label: "Work Anniversaries", icon: Briefcase },
     { href: "/feedback", label: "Patient Feedback", icon: MessageSquareHeart },
   );
   if (me.role === "ADMIN") {

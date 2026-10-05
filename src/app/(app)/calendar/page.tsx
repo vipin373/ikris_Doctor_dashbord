@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cake, CalendarClock, ChevronLeft, ChevronRight, Heart, Mail, MessageCircle, MessageSquareHeart, Plus, Settings2, Trash2 } from "lucide-react";
+import { Briefcase, Cake, CalendarClock, ChevronLeft, ChevronRight, Mail, MessageCircle, MessageSquareHeart, Plus, Settings2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { Badge, departmentTone, statusTone } from "@/components/ui/badge";
@@ -78,8 +78,8 @@ export default function CalendarPage() {
   return (
     <div>
       <PageHeader
-        title="Calendar & Birthdays"
-        description="Doctor birthdays and anniversaries, emails sent by the automations, patient feedback requests and scheduled automation runs."
+        title="Calendar"
+        description="Birthdays, work anniversaries, emails sent by the automations, patient feedback requests and scheduled automation runs, day by day."
         actions={me?.role === "ADMIN" && (
           <Button variant="outline" onClick={() => setScheduleOpen(true)}><Settings2 className="h-4 w-4" /> Automation schedule</Button>
         )}
@@ -109,7 +109,7 @@ export default function CalendarPage() {
             </div>
             <div className="flex items-center gap-3 text-[11px] text-ink-soft">
               <Legend icon={Cake} cls="text-pink-600" label="Birthday" />
-              <Legend icon={Heart} cls="text-rose-600" label="Anniversary" />
+              <Legend icon={Briefcase} cls="text-indigo-600" label="Work anniversary" />
               <Legend icon={Mail} cls="text-emerald-700" label="Emails sent" />
               <Legend icon={MessageSquareHeart} cls="text-sky-700" label="Feedback" />
               <Legend icon={CalendarClock} cls="text-violet-700" label="Scheduled" />
@@ -139,7 +139,7 @@ export default function CalendarPage() {
                       <span className={cn("mb-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
                         d === today ? "bg-brand-800 font-semibold text-white" : "text-ink")}>{Number(d.slice(8))}</span>
                       {births > 0 && <Chip icon={Cake} cls="bg-pink-50 text-pink-700" text={births === 1 ? info!.people.find((p) => p.kind === "birthday")!.doctor_name : `${births} birthdays`} />}
-                      {annivs > 0 && <Chip icon={Heart} cls="bg-rose-50 text-rose-700" text={`${annivs} anniversar${annivs === 1 ? "y" : "ies"}`} />}
+                      {annivs > 0 && <Chip icon={Briefcase} cls="bg-indigo-50 text-indigo-700" text={annivs === 1 ? info!.people.find((p) => p.kind === "anniversary")!.doctor_name : `${annivs} anniversaries`} />}
                       {info?.schedule.map((s) => <Chip key={s.name} icon={CalendarClock} cls="bg-violet-50 text-violet-700" text={s.name} />)}
                       {sent > 0 && <Chip icon={Mail} cls="bg-emerald-50 text-emerald-700" text={`${sent} sent${failed ? ` · ${failed} failed` : ""}`} />}
                       {sent === 0 && failed > 0 && <Chip icon={Mail} cls="bg-red-50 text-red-700" text={`${failed} failed`} />}
@@ -161,10 +161,10 @@ export default function CalendarPage() {
               ) : (
                 <>
                   {day.people.length > 0 && (
-                    <Section title="Birthdays & anniversaries">
+                    <Section title="Birthdays & work anniversaries">
                       {day.people.map((p) => (
                         <Link key={`${p.kind}${p.doctor_id}`} href={`/doctors/${p.doctor_id}`} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-slate-50">
-                          {p.kind === "birthday" ? <Cake className="h-4 w-4 text-pink-600" /> : <Heart className="h-4 w-4 text-rose-600" />}
+                          {p.kind === "birthday" ? <Cake className="h-4 w-4 text-pink-600" /> : <Briefcase className="h-4 w-4 text-indigo-600" />}
                           <span className="flex-1 font-medium text-ink">{p.doctor_name}</span>
                           <Badge tone={departmentTone(p.department)}>{p.sub_department || DEPARTMENT_LABEL[p.department]}</Badge>
                         </Link>
@@ -206,39 +206,49 @@ export default function CalendarPage() {
             </CardBody>
           </Card>
 
-          <Card>
-            <CardHeader title="Upcoming birthdays & anniversaries" description="Next 30 days" />
-            <CardBody className="p-0">
-              {upcoming.isLoading ? <div className="p-4"><Skeleton className="h-20" /></div> : upcoming.data?.items.length ? (
-                <ul className="divide-y divide-line">
-                  {upcoming.data.items.map((u) => {
-                    const wa = whatsappLink(u.contact_number);
-                    return (
-                      <li key={`${u.kind}${u.doctor_id}`} className="flex items-center gap-3 px-4 py-2.5">
-                        {u.kind === "birthday" ? <Cake className="h-4 w-4 shrink-0 text-pink-600" /> : <Heart className="h-4 w-4 shrink-0 text-rose-600" />}
-                        <div className="min-w-0 flex-1">
-                          <Link href={`/doctors/${u.doctor_id}`} className="block truncate text-sm font-medium text-ink hover:underline">{u.doctor_name}</Link>
-                          <p className="text-[11px] text-ink-soft">
-                            {u.days_until === 0 ? "Today" : u.days_until === 1 ? "Tomorrow" : `In ${u.days_until} days`} · {formatDayMonth(u.next_date)}
-                          </p>
-                        </div>
-                        {u.email && <a href={`mailto:${u.email}`} aria-label="Email" className="rounded p-1 text-ink-soft hover:bg-slate-100 hover:text-brand-800"><Mail className="h-4 w-4" /></a>}
-                        {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="rounded p-1 text-ink-soft hover:bg-slate-100 hover:text-brand-800"><MessageCircle className="h-4 w-4" /></a>}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <EmptyState icon={Cake} title="No birthdays or anniversaries in the next 30 days"
-                  description={noDates ? "No doctor has a date of birth yet. See the note above." : undefined} />
-              )}
-            </CardBody>
-          </Card>
+          <UpcomingCard kind="birthday" items={upcoming.data?.items} loading={upcoming.isLoading} />
+          <UpcomingCard kind="anniversary" items={upcoming.data?.items} loading={upcoming.isLoading} />
         </div>
       </div>
 
       {scheduleOpen && <ScheduleDialog onClose={() => setScheduleOpen(false)} />}
     </div>
+  );
+}
+
+function UpcomingCard({ kind, items, loading }: { kind: "birthday" | "anniversary"; items?: UpcomingDate[]; loading: boolean }) {
+  const list = (items ?? []).filter((u) => u.kind === kind);
+  const isB = kind === "birthday";
+  const Icon = isB ? Cake : Briefcase;
+  return (
+    <Card>
+      <CardHeader title={isB ? "Upcoming birthdays" : "Upcoming work anniversaries"} description="Next 30 days"
+        action={<Link href={isB ? "/birthdays" : "/anniversaries"} className="text-xs font-medium text-brand-700 hover:underline">View all</Link>} />
+      <CardBody className="p-0">
+        {loading ? <div className="p-4"><Skeleton className="h-16" /></div> : list.length ? (
+          <ul className="divide-y divide-line">
+            {list.slice(0, 8).map((u) => {
+              const wa = whatsappLink(u.contact_number);
+              return (
+                <li key={u.doctor_id} className="flex items-center gap-3 px-4 py-2.5">
+                  <Icon className={cn("h-4 w-4 shrink-0", isB ? "text-pink-600" : "text-indigo-600")} />
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/doctors/${u.doctor_id}`} className="block truncate text-sm font-medium text-ink hover:underline">{u.doctor_name}</Link>
+                    <p className="text-[11px] text-ink-soft">
+                      {u.days_until === 0 ? "Today" : u.days_until === 1 ? "Tomorrow" : `In ${u.days_until} days`} · {formatDayMonth(u.next_date)}
+                    </p>
+                  </div>
+                  {u.email && <a href={`mailto:${u.email}`} aria-label="Email" className="rounded p-1 text-ink-soft hover:bg-slate-100 hover:text-brand-800"><Mail className="h-4 w-4" /></a>}
+                  {wa && <a href={wa} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="rounded p-1 text-ink-soft hover:bg-slate-100 hover:text-brand-800"><MessageCircle className="h-4 w-4" /></a>}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="px-4 py-5 text-sm text-ink-soft">No {isB ? "birthdays" : "work anniversaries"} in the next 30 days.</p>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 

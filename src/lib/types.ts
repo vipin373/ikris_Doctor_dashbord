@@ -272,6 +272,12 @@ export interface UpcomingDate {
   days_until: number;
 }
 
+export interface ImportantDate extends Omit<UpcomingDate, "kind"> {
+  original: string;
+  year: number | null;
+  last_wish_at: string | null;
+}
+
 export interface ScheduleItem {
   name: string;
   department: Department;

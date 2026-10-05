@@ -88,6 +88,16 @@ async def upcoming(days: int = Query(30, ge=0, le=366), user: CurrentUser = Depe
     return {"items": rows, **counts}
 
 
+@router.get("/people")
+async def people(kind: str = Query(..., pattern="^(birthday|anniversary)$"), user: CurrentUser = Depends(get_current_user)):
+    """Every doctor with this kind of date, soonest first (Birthdays / Work Anniversaries pages)."""
+    rows = await user.db().rpc("important_dates", {"p_kind": kind})
+    for r in rows:
+        orig = r.get("original") or ""
+        r["year"] = int(orig[:4]) if orig[:4].isdigit() and int(orig[:4]) > 1904 else None
+    return {"kind": kind, "items": rows}
+
+
 @router.get("/schedule")
 async def get_schedule(user: CurrentUser = Depends(get_current_user)):
     return await _schedule(user)

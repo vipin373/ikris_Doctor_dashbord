@@ -325,7 +325,7 @@ function ImportantDates({ doctor: d }: { doctor: Doctor }) {
       <CardBody>
         <dl className="grid grid-cols-2 gap-4">
           <Field label="Birthday" value={d.date_of_birth && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5 text-ink-soft" />{dateLabel(d.date_of_birth)}</span>} />
-          <Field label="Anniversary" value={dateLabel(d.date_of_anniversary)} />
+          <Field label="Work anniversary" value={dateLabel(d.date_of_anniversary)} />
         </dl>
         {(manual.date_of_birth || manual.date_of_anniversary) && <p className="mt-3 text-[11px] text-ink-soft">Entered in the dashboard.</p>}
       </CardBody>
@@ -333,7 +333,7 @@ function ImportantDates({ doctor: d }: { doctor: Doctor }) {
         footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={() => save.mutate()} disabled={save.isPending}>Save</Button></>}>
         <div className="space-y-4">
           <DatePicker label="Date of birth" value={dob} onChange={setDob} />
-          <DatePicker label="Date of anniversary" value={ann} onChange={setAnn} />
+          <DatePicker label="Work anniversary" value={ann} onChange={setAnn} />
           <p className="text-[11px] text-ink-soft">Leave day and month empty to clear a date. The year is optional.</p>
         </div>
       </Dialog>
