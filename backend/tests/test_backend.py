@@ -351,6 +351,27 @@ def test_birthday_sheet_forms_and_multi_email():
     assert bad.fields["email_norm"] is None and "email_invalid" in bad.issues
 
 
+def test_birthday_master_sheet():
+    sheet = [["Sr No", "Doctor Name", "Email", "Country Code", "WhatsApp Number", "Birthday (DD/MM)", "Work Anniversary (DD/MM)",
+              "Active", "Birthday Email Sent On", "Birthday WhatsApp Sent On", "Anniversary Email Sent On", "Anniversary WhatsApp Sent On", "Remarks"],
+             ["1", "Boman", "b@example.com", "91", "9820000001", "01/09", "16/11", "Yes", "2026-09-01", "2026-09-01"],
+             ["52", "Shilpi", "", "91", "8826990915", "14/08", "14/08", "Yes", "", "2026-08-14", "", "", "Internal/test contact"]]
+    events = [
+        {"channel": "EMAIL", "event_type": "Birthday email", "date_column": "Birthday Email Sent On", "status_from_date": True},
+        {"channel": "WHATSAPP", "event_type": "Birthday WhatsApp", "date_column": "Birthday WhatsApp Sent On", "status_from_date": True},
+        {"channel": "EMAIL", "event_type": "Anniversary email", "date_column": "Anniversary Email Sent On", "status_from_date": True},
+    ]
+    m = {"fields": {"date_of_birth": "Birthday (DD/MM)", "date_of_anniversary": "Work Anniversary (DD/MM)"},
+         "date_formats": ["%d/%m", "%Y-%m-%d"], "events": events}
+    boman, shilpi = map_doctor_tab(ctx("NPP", m, "Doctors"), sheet).doctors
+    assert boman.fields["date_of_birth"] == "1904-09-01" and boman.fields["date_of_anniversary"] == "1904-11-16"
+    assert boman.fields["whatsapp_number"] == "9820000001"
+    assert [(e["channel"], e["occurred_at"][:10]) for e in boman.events] == [("EMAIL", "2026-09-01"), ("WHATSAPP", "2026-09-01")]
+    assert shilpi.dedupe_key == "p:8826990915"                 # no email: WhatsApp number identifies
+    assert [e["event_type"] for e in shilpi.events] == ["Birthday WhatsApp"]
+    assert shilpi.fields["extra"]["Remarks"] == "Internal/test contact"
+
+
 def test_bridge_script_and_url():
     script = sheet_bridge.render_script("sheet-id", "Demo", "tok", ["Email Template 1", "Subject Lines"])
     assert "var IKRIS_TOKEN = 'tok';" in script and "['Email Template 1', 'Subject Lines']" in script

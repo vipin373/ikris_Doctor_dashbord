@@ -339,7 +339,8 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
         email_norm, issue = norm_email(fields.get("email"))
         if issue:
             issues.append(issue)
-        phone_norm, issue = norm_phone(fields.get("contact_number"))
+        # WhatsApp-only sheets: use the WhatsApp number to identify the doctor
+        phone_norm, issue = norm_phone(fields.get("contact_number") or fields.get("whatsapp_number"))
         if issue:
             issues.append(issue)
         wa_norm, _ = norm_phone(fields.get("whatsapp_number"))
@@ -391,9 +392,12 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
 
         events = []
         for rule in event_rules:
-            status_raw = raw.get(rule.get("status_column", ""))
             error = raw.get(rule.get("error_column", "")) if rule.get("error_column") else None
-            status = _event_status(status_raw, rule, error)
+            if rule.get("status_from_date"):
+                # "Sent On" style columns: a date means it was sent that day
+                status = "Sent" if raw.get(rule.get("date_column", "")) else None
+            else:
+                status = _event_status(raw.get(rule.get("status_column", "")), rule, error)
             if status is None:
                 continue
             occurred = parse_date(raw.get(rule.get("date_column", "")), formats) if rule.get("date_column") else None

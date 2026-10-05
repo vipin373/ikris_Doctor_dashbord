@@ -5,6 +5,22 @@ the Sync Center (database) is the source of truth and Admins edit mappings there
 Tabs not listed here are still discovered automatically on every sync.
 """
 
+BIRTHDAY_MASTER_MAPPING = {
+    "access_mode": "public_link",
+    "fields": {"date_of_birth": "Birthday (DD/MM)", "date_of_anniversary": "Work Anniversary (DD/MM)"},
+    "date_formats": ["%d/%m", "%Y-%m-%d"],
+    "events": [
+        {"channel": "EMAIL", "event_type": "Birthday email", "campaign": "Birthday wishes",
+         "date_column": "Birthday Email Sent On", "status_from_date": True},
+        {"channel": "WHATSAPP", "event_type": "Birthday WhatsApp", "campaign": "Birthday wishes",
+         "date_column": "Birthday WhatsApp Sent On", "status_from_date": True},
+        {"channel": "EMAIL", "event_type": "Anniversary email", "campaign": "Anniversary wishes",
+         "date_column": "Anniversary Email Sent On", "status_from_date": True},
+        {"channel": "WHATSAPP", "event_type": "Anniversary WhatsApp", "campaign": "Anniversary wishes",
+         "date_column": "Anniversary WhatsApp Sent On", "status_from_date": True},
+    ],
+}
+
 DEFAULT_SOURCES = [
     {
         "name": "MSL ALL INDIA",
@@ -117,25 +133,19 @@ DEFAULT_SOURCES = [
         ],
     },
     {
-        "name": "Birthday & Anniversary Email Automation",
-        "spreadsheet_id": "1A0tPJDI1983I_QcVcwNnVMVsRJkDA8ptGoSnK8UJ_iI",
+        "name": "Doctor Birthday & Anniversary (Email + WhatsApp)",
+        "spreadsheet_id": "1rFGA6MTPdQvkQZL41oqydC1rDe4WNswxI-RZcTVsjGg",
         "default_department": "NPP",
-        "description": "Doctor birthdays and anniversaries used by the wishes email automation.",
+        "description": "Doctor birthdays and work anniversaries with the email and WhatsApp wishes sent.",
         "tabs": [
             {
-                "tab_name": "Sheet1",
+                "tab_name": "Doctors",
                 "data_kind": "doctors",
                 "department_code": "NPP",
                 "is_enabled": True,
-                "mapping": {
-                    "access_mode": "public_link",
-                    "date_formats": ["%d-%b"],
-                    "events": [{
-                        "channel": "EMAIL", "event_type": "Birthday / anniversary email",
-                        "campaign": "Birthday & anniversary wishes", "status_column": "Status",
-                    }],
-                },
+                "mapping": BIRTHDAY_MASTER_MAPPING,
             },
+            {"tab_name": "Log", "data_kind": "ignore", "is_enabled": False, "mapping": {}},
         ],
     },
 ]
