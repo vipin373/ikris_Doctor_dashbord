@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/doctors", tags=["doctors"])
 
 LIST_COLUMNS = (
     "id,s_no,doctor_name,qualification,specialty,category,department,sub_department,institute,city,state,"
-    "bdm,nsm,contact_number,email,date_of_birth,date_of_anniversary,last_contact_at,last_contact_status,"
+    "bdm,nsm,contact_number,whatsapp_number,email,date_of_birth,date_of_anniversary,last_contact_at,last_contact_status,"
     "last_contact_channel,emails_sent,whatsapp_sent,data_issues"
 )
 SORTABLE = {
@@ -208,6 +208,10 @@ async def get_doctor(doctor_id: str, user: CurrentUser = Depends(get_current_use
         "select": "id,channel,direction,event_type,status,subject,detail,campaign,occurred_at,source",
         "order": "occurred_at.desc.nullslast,id.desc",
     })
+    # Older copies of a sheet row (from before the row identity fix) are hidden
+    # when the same sheet still has a current row for this doctor.
+    current = {(s["spreadsheet_id"], s["sheet_name"]) for s in sources if not s["missing_from_source"]}
+    sources = [s for s in sources if not s["missing_from_source"] or (s["spreadsheet_id"], s["sheet_name"]) not in current]
     names = await _source_names([s["spreadsheet_id"] for s in sources], user)
     for s in sources:
         s["source_name"] = names.get(s["spreadsheet_id"])

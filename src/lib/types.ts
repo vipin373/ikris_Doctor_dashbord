@@ -24,6 +24,7 @@ export interface DoctorRow {
   bdm: string | null;
   nsm: string | null;
   contact_number: string | null;
+  whatsapp_number: string | null;
   email: string | null;
   date_of_birth: string | null;
   date_of_anniversary: string | null;

@@ -231,3 +231,13 @@ def test_passing_late_mention_needs_review():
             + "Also as an adjunct to surgery and radioiodine therapy in thyroid cancer.")
     c = classify(text)
     assert c.review_status == "NEEDS_REVIEW" and c.therapeutic_areas == ["ONCOLOGY"]
+
+
+def test_source_row_key_survives_cell_edits():
+    from app.services.mapping import TabContext, map_doctor_tab
+    ctx = TabContext(spreadsheet_id="s", sheet_name="Doctor List", department="RARE_DISEASES", sub_department=None, specialty=None, mapping={})
+    before = map_doctor_tab(ctx, [["Doctor Name", "Email ID"], ["Dr A", "a@x.com"], ["Dr A", "a@x.com"]])
+    after = map_doctor_tab(ctx, [["Doctor Name", "Email ID", "Whatsapp number"], ["Dr A", "a@x.com", "918448645084"], ["Dr A", "a@x.com", ""]])
+    assert [r.row_key for r in before.doctors] == [r.row_key for r in after.doctors]
+    assert before.doctors[0].row_key != before.doctors[1].row_key
+    assert after.doctors[0].fields["whatsapp_number"] == "918448645084"

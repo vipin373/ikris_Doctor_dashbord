@@ -309,6 +309,12 @@ def _event_status(value: str | None, rule: dict[str, Any], error: str | None) ->
     return value.strip()
 
 
+def _next_occurrence(counts: dict[str, int], key: str) -> int:
+    n = counts.get(key, 0)
+    counts[key] = n + 1
+    return n
+
+
 def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
     headers, rows = _rows_with_headers(values, ctx.header_row)
     result = TabResult(headers=headers)
@@ -319,6 +325,7 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
     used_headers = set(columns.values())
     formats = mapping.get("date_formats") or DEFAULT_DATE_FORMATS
     event_rules: list[dict[str, Any]] = mapping.get("events", [])
+    key_counts: dict[str, int] = {}
     for rule in event_rules:
         for key in ("status_column", "date_column", "subject_column", "error_column", "detail_column"):
             if rule.get(key):
@@ -434,7 +441,9 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
             issues=issues,
             events=events,
             row_hash=record_hash(raw),
-            row_key=record_hash({"k": dedupe_key, "raw": raw})[:24],
+            # Stable identity: the doctor (and which repeat of them in this tab), not the cell
+            # contents, so edits such as a new column or "Last Sent Date" update the same row.
+            row_key=record_hash({"k": dedupe_key, "n": _next_occurrence(key_counts, dedupe_key)})[:24],
         ))
     return result
 

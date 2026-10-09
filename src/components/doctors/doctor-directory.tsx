@@ -20,7 +20,7 @@ import { cn, DEPARTMENT_LABEL, formatDate, formatDayMonth, ISSUE_LABEL, whatsapp
 
 type ColumnKey =
   | "s_no" | "doctor_name" | "qualification" | "specialty" | "category" | "department" | "institute" | "city"
-  | "state" | "bdm" | "nsm" | "contact_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at";
+  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at";
 
 const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisible: boolean }[] = [
   { key: "s_no", label: "S.No.", defaultVisible: false },
@@ -35,6 +35,7 @@ const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisib
   { key: "bdm", label: "BDM", sortable: true, defaultVisible: true },
   { key: "nsm", label: "NSM", sortable: true, defaultVisible: true },
   { key: "contact_number", label: "Contact", defaultVisible: false },
+  { key: "whatsapp_number", label: "WhatsApp", defaultVisible: true },
   { key: "email", label: "Email", defaultVisible: true },
   { key: "date_of_birth", label: "Birthday", defaultVisible: false },
   { key: "date_of_anniversary", label: "Anniversary", defaultVisible: false },
@@ -143,7 +144,7 @@ export function DoctorDirectory({
 
   const exportSelected = () => {
     const rows = (data?.items ?? []).filter((d) => selected.has(d.id));
-    const cols: ColumnKey[] = ["doctor_name", "specialty", "department", "institute", "city", "bdm", "nsm", "contact_number", "email"];
+    const cols: ColumnKey[] = ["doctor_name", "specialty", "department", "institute", "city", "bdm", "nsm", "contact_number", "whatsapp_number", "email"];
     const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -442,7 +443,8 @@ function Cell({ doctor: d, column }: { doctor: DoctorRow; column: ColumnKey }) {
 }
 
 function RowActions({ doctor: d, onView }: { doctor: DoctorRow; onView: () => void }) {
-  const wa = whatsappLink(d.contact_number);
+  const phone = d.whatsapp_number || d.contact_number;
+  const wa = whatsappLink(phone);
   const iconBtn = "inline-flex h-7 w-7 items-center justify-center rounded text-ink-soft hover:bg-white hover:text-brand-800 disabled:pointer-events-none disabled:opacity-30";
   return (
     <div className="inline-flex items-center gap-0.5">
@@ -460,7 +462,7 @@ function RowActions({ doctor: d, onView }: { doctor: DoctorRow; onView: () => vo
         </a>
       </Tooltip>
       <Tooltip label={wa ? "Call" : "No valid number"}>
-        <a className={cn(iconBtn, !wa && "pointer-events-none opacity-30")} href={wa ? `tel:${d.contact_number}` : undefined} aria-label="Call">
+        <a className={cn(iconBtn, !wa && "pointer-events-none opacity-30")} href={wa ? `tel:${phone}` : undefined} aria-label="Call">
           <Phone className="h-4 w-4" />
         </a>
       </Tooltip>
