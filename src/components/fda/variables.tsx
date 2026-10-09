@@ -4,8 +4,8 @@ import type { FdaConfig } from "@/lib/fda";
 
 const FALLBACK = [
   "doctor_name", "hospital_name", "specialty", "department", "city", "drug_name", "brand_name", "active_ingredient", "indication",
-  "therapeutic_area", "fda_status", "fda_approval_date", "manufacturer", "sender_name", "sender_phone", "sender_email",
-].map((name) => ({ name, group: ["drug_name", "brand_name", "active_ingredient", "indication", "therapeutic_area", "fda_status", "fda_approval_date", "manufacturer"].includes(name) ? "FDA" : name.startsWith("sender") ? "Sender" : "Doctor", description: name }));
+  "indication_full", "therapeutic_area", "fda_status", "fda_approval_date", "manufacturer", "sender_name", "sender_phone", "sender_email",
+].map((name) => ({ name, group: ["drug_name", "brand_name", "active_ingredient", "indication", "indication_full", "therapeutic_area", "fda_status", "fda_approval_date", "manufacturer"].includes(name) ? "FDA" : name.startsWith("sender") ? "Sender" : "Doctor", description: name }));
 
 /** Clickable variables; inserts {{variable}} at the cursor of the target field. */
 export function VariableChips({ config, targetId, value, onChange }: {

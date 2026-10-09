@@ -43,6 +43,15 @@ export async function generateAll(id: string, onProgress: (done: number, pending
   return made;
 }
 
+export function providerHint(error?: string | null): string | null {
+  if (!error) return null;
+  if (/message window|24|re-?engagement|outside/i.test(error)) {
+    return "WhatsApp only allows free-text messages within 24 hours of the doctor's last message. Use a template approved in Cunnekt (FDA → Templates → Cunnekt template name, status Approved) to reach doctors any time.";
+  }
+  if (/template/i.test(error)) return "Check that the Cunnekt template name, language and number of variables match the template approved in Cunnekt.";
+  return null;
+}
+
 export function deliveryLabel(m: GeneratedMessage): { text: string; tone: "green" | "red" | "neutral" | "amber" | "brand" } {
   const d = m.delivery;
   if (!d) return { text: STATUS_LABEL[m.status] ?? m.status, tone: (MESSAGE_STATUS_TONE[m.status] as never) ?? "neutral" };
@@ -170,7 +179,7 @@ export function CampaignReview({ id, single }: { id: string; single?: boolean })
                     <Td className="text-xs">{m.channel === "WHATSAPP" ? <MessageCircle className="mr-1 inline h-3.5 w-3.5" /> : <Mail className="mr-1 inline h-3.5 w-3.5" />}{CHANNEL_LABEL[m.channel]}</Td>
                     <Td>
                       <Badge tone={dl.tone}>{dl.text}</Badge>
-                      {m.delivery?.error && <p className="mt-0.5 max-w-[220px] text-[11px] text-red-700">{m.delivery.error}</p>}
+                      {m.delivery?.error && <p className="mt-0.5 max-w-[220px] text-[11px] text-red-700" title={providerHint(m.delivery.error) ?? undefined}>{m.delivery.error}</p>}
                       {blocked.length > 0 && m.status === "NEEDS_REVIEW" && <p className="mt-0.5 max-w-[220px] text-[11px] text-amber-800">{blocked[0].text}</p>}
                     </Td>
                     <Td className="text-xs text-ink-soft">{m.approved_at ? formatDateTime(m.approved_at) : "—"}</Td>
@@ -251,7 +260,12 @@ function SingleMessageCard({ m, campaignId, onPreview, onApprove, busy }: { m: G
         <p className="text-sm font-medium text-ink">{m.channel === "WHATSAPP" ? <MessageCircle className="mr-1 inline h-4 w-4" /> : <Mail className="mr-1 inline h-4 w-4" />}{CHANNEL_LABEL[m.channel]}</p>
         <Badge tone={dl.tone}>{dl.text}</Badge>
       </div>
-      {m.delivery?.error && <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700">{m.channel === "WHATSAPP" ? "WhatsApp message failed." : "Email could not be sent."} Provider error: {m.delivery.error}</p>}
+      {m.delivery?.error && (
+        <div className="rounded bg-red-50 px-2 py-1 text-xs text-red-700">
+          <p>{m.channel === "WHATSAPP" ? "WhatsApp message failed." : "Email could not be sent."} Provider error: {m.delivery.error}</p>
+          {providerHint(m.delivery.error) && <p className="mt-1 text-red-800"><b>What to do:</b> {providerHint(m.delivery.error)}</p>}
+        </div>
+      )}
       <IssueList m={m} />
       <MessageBody m={m} />
       {m.status !== "SENT" && (
