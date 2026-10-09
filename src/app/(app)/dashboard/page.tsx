@@ -27,10 +27,13 @@ export default function DashboardPage() {
   const outreach = React.useMemo(() => {
     const map: Record<string, Record<string, number | string>> = {};
     (data?.outreach_by_campaign ?? []).forEach((r) => {
-      map[r.campaign] ||= { campaign: r.campaign };
-      map[r.campaign][r.status] = r.count;
+      // one bar for all FDA drug messages instead of one per drug
+      const name = r.campaign.startsWith("FDA") ? "FDA drug messages" : r.campaign;
+      map[name] ||= { campaign: name, total: 0 };
+      map[name][r.status] = ((map[name][r.status] as number) || 0) + r.count;
+      map[name].total = (map[name].total as number) + r.count;
     });
-    return Object.values(map);
+    return Object.values(map).sort((a, b) => (b.total as number) - (a.total as number));
   }, [data]);
   const statuses = Array.from(new Set((data?.outreach_by_campaign ?? []).map((r) => r.status)));
   const categoriesSet = (data?.by_category ?? []).some((c) => c.category !== "Not set");
@@ -101,20 +104,22 @@ export default function DashboardPage() {
               </CardBody>
             </Card>
             <Card>
-              <CardHeader title="Email outreach by campaign" description="From the automation status columns in the sheets" />
-              <CardBody className="h-72">
+              <CardHeader title="Outreach by campaign" description="Emails from the sheet automations and FDA drug messages (WhatsApp + email)" />
+              <CardBody style={{ height: Math.max(220, outreach.length * 34 + 70) }}>
                 {outreach.length === 0 ? (
                   <EmptyState title="No outreach recorded yet" />
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={outreach} margin={{ left: 0, right: 8 }}>
-                      <CartesianGrid vertical={false} stroke="#EEF2F7" />
-                      <XAxis dataKey="campaign" tick={{ fontSize: 10, fill: "#334155" }} interval={0} />
-                      <YAxis tick={{ fontSize: 11, fill: "#64748B" }} />
+                    <BarChart data={outreach} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }} barCategoryGap={6}>
+                      <CartesianGrid horizontal={false} stroke="#EEF2F7" />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: "#64748B" }} allowDecimals={false} />
+                      <YAxis type="category" dataKey="campaign" width={170} interval={0}
+                        tick={{ fontSize: 11, fill: "#334155" }}
+                        tickFormatter={(v: string) => (v.length > 26 ? `${v.slice(0, 25)}…` : v)} />
                       <Tooltip cursor={{ fill: "#F1F5F9" }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       {statuses.map((s, i) => (
-                        <Bar key={s} dataKey={s} stackId="a" fill={STATUS_COLORS[s] ?? COLORS[i]} />
+                        <Bar key={s} dataKey={s} stackId="a" fill={STATUS_COLORS[s] ?? COLORS[i]} maxBarSize={22} />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
