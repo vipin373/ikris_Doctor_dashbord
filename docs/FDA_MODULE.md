@@ -50,3 +50,20 @@ licence) never overrides FDA data; disagreements are flagged.
 `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` (default `anthropic/claude-sonnet-4.5`), `CUNNEKT_API_KEY`,
 `CUNNEKT_BASE_URL`, `SMTP_*`, `EMAIL_FROM`, `FDA_API_BASE_URL`, optional `FDA_API_KEY` (higher openFDA limits),
 optional `KEGG_API_BASE_URL`, `CRON_SECRET`.
+
+## India filter (CDSCO)
+
+Only drugs **not approved in India** are shown and offered for messages.
+
+* Sources (official CDSCO): "List of Approved New Drugs" (1961 → current year) and the Biological Division's
+  r-DNA approval lists (CT-18 import, CT-21 manufacture, import/market permissions till 2019, Form 46/46A).
+  Clinical-trial permissions and inspection plans are excluded.
+* `POST /api/fda/cdsco/sync` (Admin, "Check CDSCO approvals" on the FDA page) downloads new/changed PDFs
+  (the "till date" lists are re-checked daily), indexes their words (`cdsco_terms`) and runs `fda_match_india`.
+* Per drug: active-ingredient base names (salts and biosimilar suffixes removed) are looked up.
+  APPROVED = all names listed (hidden) · NOT_FOUND = none listed (shown) · UNKNOWN = vague name
+  (e.g. coagulation factors) or only part of a combination listed (hidden until an Admin decides).
+* Admin can set "approved / not approved in India" per drug with a reason; manual decisions are never overwritten.
+* New drugs from the FDA sync are checked automatically at the end of each sync.
+* Limits: absence from CDSCO lists is strong evidence, not legal proof; the 2006 list is a scanned image
+  without text. Re-run the CDSCO check monthly (or after CDSCO publishes new lists).
