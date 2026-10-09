@@ -27,7 +27,7 @@ from typing import Any
 import httpx
 
 LIST_PAGE = "https://cdsco.gov.in/opencms/opencms/en/Approval_new/Approved-New-Drugs/"
-LINK_RE = re.compile(r'href="([^"]*download_file_division\.jsp\?num_id=[^"]+)"', re.I)
+LINK_RE = re.compile(r"""href=['"]([^'"]*download_file_division\.jsp\?num_id=[^'"]+)['"]""", re.I)
 
 SALT_WORDS = {
     "hydrochloride", "dihydrochloride", "hcl", "sodium", "disodium", "potassium", "calcium", "magnesium", "mesylate",
