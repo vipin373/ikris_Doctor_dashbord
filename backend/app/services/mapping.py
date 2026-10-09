@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import difflib
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -526,12 +527,49 @@ class MergedDoctor:
     record_hash: str
 
 
+def _same_person(a: str, b: str) -> bool:
+    if not a or not b:
+        return True  # a row without a name cannot contradict the others
+    a2, b2 = a.replace(" ", ""), b.replace(" ", "")
+    if a2 == b2 or a2 in b2 or b2 in a2:
+        return True
+    if difflib.SequenceMatcher(None, a2, b2).ratio() >= 0.8:
+        return True
+    # "p k das" / "pratap das", "vineet gupta" / "vineet govinda": a shared word and the same initial
+    ta, tb = a.split(), b.split()
+    shared = {w for w in ta if len(w) >= 3} & {w for w in tb if len(w) >= 3}
+    return bool(shared) and ta[0][0] == tb[0][0]
+
+
+def _split_shared_contacts(tab_results: list[tuple[TabContext, TabResult]]) -> None:
+    """Rows sharing an email/phone but with clearly different names (a shared
+    hospital inbox, or test rows) are different doctors. The first name seen
+    keeps the plain key, so existing records stay stable; other names get
+    their own key. Spelling variants ("Dr. Vipiin" / "VIPIN") stay together."""
+    groups: dict[tuple[str, str], list[DoctorRow]] = {}
+    for _ctx, result in tab_results:
+        for row in result.doctors:
+            if row.dedupe_key.startswith(("e:", "p:")):
+                groups.setdefault((row.department, row.dedupe_key), []).append(row)
+    for (_dept, key), rows in groups.items():
+        clusters: list[str] = []
+        for row in rows:
+            name = row.fields.get("name_norm") or ""
+            home = next((c for c in clusters if _same_person(c, name)), None)
+            if home is None:
+                clusters.append(name)
+                home = name
+            if home != clusters[0]:
+                row.dedupe_key = f"{key}|n:{home}"
+
+
 def merge_doctors(tab_results: list[tuple[TabContext, TabResult]]) -> tuple[list[MergedDoctor], int]:
     """Combine rows that describe the same doctor (same department + identity).
 
     The first non-empty value wins for each field; every source row is kept for
     traceability. Returns (merged doctors, number of duplicate rows folded in).
     """
+    _split_shared_contacts(tab_results)
     merged: dict[tuple[str, str], MergedDoctor] = {}
     duplicates = 0
     for ctx, result in tab_results:

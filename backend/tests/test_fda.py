@@ -281,3 +281,15 @@ def test_drug_not_offered_when_approved_in_india():
     assert drug_sendable({**base, "india_status": "NOT_FOUND"}) is None
     assert "approved in India" in drug_sendable({**base, "india_status": "APPROVED"})
     assert drug_sendable({**base, "india_status": None})
+
+
+def test_shared_email_different_names_become_separate_doctors():
+    from app.services.mapping import TabContext, map_doctor_tab, merge_doctors
+    ctx = TabContext(spreadsheet_id="s", sheet_name="Doctors", department="NPP", sub_department=None, specialty=None, mapping={})
+    tab = map_doctor_tab(ctx, [["Doctor Name", "Email", "Specialty"],
+                               ["test", "v@x.com", "HEMA"], ["test", "v@x.com", "HEMA"],
+                               ["Dr. vipiin", "v@x.com", "ONC"], ["VIPIN", "v@x.com", "ONC"],
+                               ["Dr. Asha Rao", "a@x.com", "ONC"], ["Asha Rao", "a@x.com", "ONC"]])
+    docs, _ = merge_doctors([(ctx, tab)])
+    names = sorted((d.dedupe_key, d.fields["doctor_name"]) for d in docs)
+    assert names == [("e:a@x.com", "Dr. Asha Rao"), ("e:v@x.com", "test"), ("e:v@x.com|n:vipiin", "Dr. vipiin")]
