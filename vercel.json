@@ -1,9 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index"
+    }
+  ],
   "functions": {
-    "api/index.py": { "maxDuration": 60, "includeFiles": "backend/app/**" }
+    "api/index.py": {
+      "maxDuration": 60,
+      "includeFiles": "backend/app/**"
+    }
   },
-  "crons": [{ "path": "/api/cron/sync", "schedule": "30 0 * * *" }]
+  "crons": [
+    {
+      "path": "/api/cron/sync",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/fda-sync",
+      "schedule": "0 21 * * *"
+    }
+  ]
 }

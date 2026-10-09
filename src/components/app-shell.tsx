@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
   Activity, BarChart3, Briefcase, Cake, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
-  Menu, MessageSquareHeart, Search, Shield, Stethoscope, Users, X,
+  Menu, MessageSquareHeart, Pill, Search, Shield, Stethoscope, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { api } from "@/lib/api";
@@ -42,6 +42,7 @@ function useNav(): NavItem[] {
     items.push({ href: "/rare-diseases", label: "Rare Diseases", icon: Dna, children: subs("RARE_DISEASES") });
   }
   items.push(
+    { href: "/fda", label: "FDA", icon: Pill },
     { href: "/templates", label: "Email Templates", icon: FileText },
     { href: "/calendar", label: "Calendar", icon: CalendarDays },
     { href: "/birthdays", label: "Birthdays", icon: Cake },

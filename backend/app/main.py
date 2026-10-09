@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import calendar, core, doctors, google_sheets, templates
+from .api import calendar, campaigns, core, doctors, fda, fda_templates, google_sheets, templates
 from .core.config import get_settings
 from .core.security import client_ip, rate_limiter
 from .core.supabase import ServiceUnavailable, SupabaseError
@@ -27,7 +27,7 @@ app.add_middleware(
     allow_origins=get_settings().allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Automation-Token"],
 )
 
 
@@ -73,5 +73,8 @@ app.include_router(doctors.router)
 app.include_router(google_sheets.router)
 app.include_router(templates.router)
 app.include_router(calendar.router)
+app.include_router(fda.router)
+app.include_router(fda_templates.router)
+app.include_router(campaigns.router)
 
 _ = HTTPException

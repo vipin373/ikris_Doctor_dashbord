@@ -25,10 +25,28 @@ class Settings:
     app_url: str
     allowed_origins: list[str] = field(default_factory=list)
     rate_limit_per_minute: int = 240
+    # FDA module integrations (server-side only; never sent to the browser)
+    fda_api_base_url: str = "https://api.fda.gov"
+    fda_api_key: str = ""
+    kegg_api_base_url: str = ""
+    openrouter_api_key: str = ""
+    openrouter_model: str = "anthropic/claude-sonnet-4.5"
+    cunnekt_api_key: str = ""
+    cunnekt_base_url: str = "https://app.cunnekt.com/restapi/v1/whatsapp/"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    email_from: str = ""
 
     @property
     def has_service_role(self) -> bool:
         return bool(self.supabase_service_role_key)
+
+    @property
+    def missing_email_config(self) -> list[str]:
+        return [n for n, v in (("SMTP_HOST", self.smtp_host), ("SMTP_USER", self.smtp_user),
+                               ("SMTP_PASSWORD", self.smtp_password), ("EMAIL_FROM", self.email_from)) if not v]
 
     @property
     def has_google_service_account(self) -> bool:
@@ -55,4 +73,16 @@ def get_settings() -> Settings:
         app_url=app_url,
         allowed_origins=origins or ["http://localhost:3000"],
         rate_limit_per_minute=int(_env("RATE_LIMIT_PER_MINUTE", default="240")),
+        fda_api_base_url=_env("FDA_API_BASE_URL", default="https://api.fda.gov").rstrip("/"),
+        fda_api_key=_env("FDA_API_KEY"),
+        kegg_api_base_url=_env("KEGG_API_BASE_URL").rstrip("/"),
+        openrouter_api_key=_env("OPENROUTER_API_KEY"),
+        openrouter_model=_env("OPENROUTER_MODEL", default="anthropic/claude-sonnet-4.5"),
+        cunnekt_api_key=_env("CUNNEKT_API_KEY"),
+        cunnekt_base_url=_env("CUNNEKT_BASE_URL", default="https://app.cunnekt.com/restapi/v1/whatsapp/").rstrip("/") + "/",
+        smtp_host=_env("SMTP_HOST"),
+        smtp_port=int(_env("SMTP_PORT", default="587") or 587),
+        smtp_user=_env("SMTP_USER"),
+        smtp_password=_env("SMTP_PASSWORD"),
+        email_from=_env("EMAIL_FROM", "SMTP_USER"),
     )

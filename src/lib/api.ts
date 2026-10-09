@@ -29,7 +29,7 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   const res = await fetch(`/api${path}`, {
     ...init,
     headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
       ...(t ? { Authorization: `Bearer ${t}` } : {}),
       ...init.headers,
     },
@@ -58,6 +58,11 @@ export const api = {
   put: async <T>(path: string, body: unknown): Promise<T> =>
     (await request(path, { method: "PUT", body: JSON.stringify(body) })).json(),
   del: async <T>(path: string): Promise<T> => (await request(path, { method: "DELETE" })).json(),
+  upload: async <T>(path: string, file: File): Promise<T> => {
+    const form = new FormData();
+    form.append("file", file);
+    return (await request(path, { method: "POST", body: form, headers: {} })).json();
+  },
   download: async (path: string, params: Query, filename: string): Promise<void> => {
     const res = await request(path + qs(params));
     const blob = await res.blob();
