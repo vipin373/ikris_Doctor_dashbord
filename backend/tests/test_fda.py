@@ -267,7 +267,8 @@ def test_cdsco_ingredient_keys():
     assert ingredient_keys("Denosumab-kyqq") == (["denosumab"], None)
     assert ingredient_keys("Sodium Phenylbutyrate") == (["phenylbutyrate"], None)
     assert ingredient_keys("Dabrafenib Mesylate; Trametinib") == (["dabrafenib", "trametinib"], None)
-    assert ingredient_keys("Ado-Trastuzumab Emtansine")[0] == ["ado trastuzumab emtansine"]
+    assert ingredient_keys("Ado-Trastuzumab Emtansine")[0] == ["trastuzumab emtansine"]
+    assert ingredient_keys("Treprostinil Diolamine")[0] == ["treprostinil"]
     keys, problem = ingredient_keys("Coagulation Factor IX (Recombinant)")
     assert keys == [] and problem
     words = tokens("3. Trame-\ntinib tablets 0.5mg  Indicated for melanoma")

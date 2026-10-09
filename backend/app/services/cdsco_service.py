@@ -27,6 +27,13 @@ from typing import Any
 import httpx
 
 LIST_PAGE = "https://cdsco.gov.in/opencms/opencms/en/Approval_new/Approved-New-Drugs/"
+# CDSCO pages with approval lists. (page, include-title regex, exclude-title regex)
+SOURCES = [
+    (LIST_PAGE, None, None),
+    # Biologics (r-DNA origin: monoclonal antibodies, enzymes, ...) are approved by the Biological Division.
+    ("https://cdsco.gov.in/opencms/opencms/en/biologicals/rDNA/",
+     r"approved|market permission|form 46", r"inspection|clinical trial|ct permission"),
+]
 LINK_RE = re.compile(r"""href=['"]([^'"]*download_file_division\.jsp\?num_id=[^'"]+)['"]""", re.I)
 
 SALT_WORDS = {
@@ -37,7 +44,7 @@ SALT_WORDS = {
     "monohydrate", "dihydrate", "trihydrate", "sesquihydrate", "anhydrous", "dimethyl", "sulfoxide", "ethanolate",
     "free", "base", "acid", "esylate", "camsylate", "napsylate", "oxalate", "benzoate", "propionate", "valerate",
     "dipropionate", "palmitate", "pamoate", "stearate", "nitrate", "carbonate", "bicarbonate", "trifluoroacetate",
-    "hemisulfate", "edisylate", "olamine", "injection", "recombinant", "liposome", "liposomal", "protein", "bound",
+    "hemisulfate", "edisylate", "olamine", "diolamine", "fam", "ado", "injection", "recombinant", "liposome", "liposomal", "protein", "bound",
     "particles", "albumin", "human", "kit", "for", "of", "and", "with", "in", "usp", "eq",
 }
 # Words that make a name too vague to match safely against the lists.
@@ -78,9 +85,21 @@ def ingredient_keys(active_ingredient: str | None, generic_name: str | None = No
 
 
 async def list_documents(client: httpx.AsyncClient) -> list[dict[str, str]]:
-    resp = await client.get(LIST_PAGE)
-    resp.raise_for_status()
-    html = resp.text
+    docs: list[dict[str, str]] = []
+    for page, include, exclude in SOURCES:
+        resp = await client.get(page)
+        resp.raise_for_status()
+        for d in _links(resp.text):
+            if include and not re.search(include, d["title"], re.I):
+                continue
+            if exclude and re.search(exclude, d["title"], re.I):
+                continue
+            if d["url"] not in {x["url"] for x in docs}:
+                docs.append(d)
+    return docs
+
+
+def _links(html: str) -> list[dict[str, str]]:
     docs: list[dict[str, str]] = []
     for m in LINK_RE.finditer(html):
         href = m.group(1).replace("&amp;", "&")

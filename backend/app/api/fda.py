@@ -306,10 +306,10 @@ async def cdsco_sync(request: Request, user: CurrentUser = Depends(require_admin
         raise HTTPException(502, f"Could not read the CDSCO website: {exc}")
     if fetched["remaining"]:
         return {"done": False, **fetched}
-    missing = await db.select_all("fda_drugs", [("select", "application_number,active_ingredient,generic_name"),
-                                                ("india_keys", "is.null")])
-    if missing:
-        await cdsco_service.backfill_keys(lambda fn, rows: db.rpc(fn, {"p_token": "", "p_rows": rows}), missing)
+    # (re)compute the ingredient names for every drug, so matching-rule improvements apply to all
+    drugs = await db.select_all("fda_drugs", [("select", "application_number,active_ingredient,generic_name")])
+    if drugs:
+        await cdsco_service.backfill_keys(lambda fn, rows: db.rpc(fn, {"p_token": "", "p_rows": rows}), drugs)
     result = await db.rpc("fda_match_india", {"p_token": ""})
     docs, _ = await db.select("cdsco_documents", {"select": "title,pages,text_pages,error"})
     scanned = [d["title"] for d in docs if d.get("pages") and not d.get("text_pages")]
