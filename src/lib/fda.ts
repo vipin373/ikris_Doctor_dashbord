@@ -68,7 +68,23 @@ export interface FdaDrug {
   review_flags?: string[];
   last_sent_to_doctor?: string | null;
   matched_areas?: string[];
+  india_status?: IndiaStatus | null;
+  india_evidence?: string | null;
+  india_checked_at?: string | null;
 }
+
+export type IndiaStatus = "APPROVED" | "NOT_FOUND" | "UNKNOWN" | "MANUAL_APPROVED" | "MANUAL_NOT_APPROVED";
+export const INDIA_LABEL: Record<string, string> = {
+  NOT_FOUND: "Not approved in India",
+  MANUAL_NOT_APPROVED: "Not approved in India (confirmed)",
+  APPROVED: "Approved in India",
+  MANUAL_APPROVED: "Approved in India (confirmed)",
+  UNKNOWN: "India status: check manually",
+  NOT_CHECKED: "India status not checked",
+};
+export const INDIA_TONE: Record<string, "green" | "red" | "amber" | "neutral" | "violet"> = {
+  NOT_FOUND: "green", MANUAL_NOT_APPROVED: "green", APPROVED: "neutral", MANUAL_APPROVED: "neutral", UNKNOWN: "amber", NOT_CHECKED: "amber",
+};
 
 export interface Classification {
   id: number;
@@ -101,6 +117,10 @@ export interface SyncRun {
 
 export interface FdaOverview {
   total: number;
+  total_all: number;
+  india: Record<string, number>;
+  cdsco_documents: number;
+  cdsco_checked_at: string | null;
   by_department: Record<string, number>;
   needs_review: number;
   last_sync: SyncRun | null;

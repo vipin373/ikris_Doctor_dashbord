@@ -259,3 +259,24 @@ def test_cunnekt_wrapped_response():
     assert ok.ok and ok.provider_message_id == "wamid.HBgM"
     bad = _parse(R({"status": False, "message": "You can not send message out side of message window."}))
     assert not bad.ok and "message window" in bad.error
+
+
+def test_cdsco_ingredient_keys():
+    from app.services.cdsco_service import ingredient_keys, tokens
+    assert ingredient_keys("Trametinib Dimethyl Sulfoxide") == (["trametinib"], None)
+    assert ingredient_keys("Denosumab-kyqq") == (["denosumab"], None)
+    assert ingredient_keys("Sodium Phenylbutyrate") == (["phenylbutyrate"], None)
+    assert ingredient_keys("Dabrafenib Mesylate; Trametinib") == (["dabrafenib", "trametinib"], None)
+    assert ingredient_keys("Ado-Trastuzumab Emtansine")[0] == ["ado trastuzumab emtansine"]
+    keys, problem = ingredient_keys("Coagulation Factor IX (Recombinant)")
+    assert keys == [] and problem
+    words = tokens("3. Trame-\ntinib tablets 0.5mg  Indicated for melanoma")
+    assert "trametinib" in words and "melanoma" in words
+
+
+def test_drug_not_offered_when_approved_in_india():
+    from app.services.doctor_matcher import drug_sendable
+    base = {"classification_status": "CLASSIFIED", "fda_status": "Approved"}
+    assert drug_sendable({**base, "india_status": "NOT_FOUND"}) is None
+    assert "approved in India" in drug_sendable({**base, "india_status": "APPROVED"})
+    assert drug_sendable({**base, "india_status": None})

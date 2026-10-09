@@ -241,6 +241,8 @@ class SyncStore:
     an automation token (and can be faked in tests)."""
     write: Callable[[list[dict], str | None], Awaitable[dict]]
     save_run: Callable[[dict], Awaitable[str]]
+    set_india_keys: Callable[[list[dict]], Awaitable[Any]] | None = None
+    match_india: Callable[[], Awaitable[Any]] | None = None
 
 
 async def run_sync_chunk(
@@ -324,6 +326,13 @@ async def run_sync_chunk(
                     totals["failed"] += 1
             if drugs:
                 result = await store.write(drugs, _fda_date(source_updated))
+                if store.set_india_keys:
+                    from .cdsco_service import ingredient_keys
+                    rows = []
+                    for dr in drugs:
+                        keys, problem = ingredient_keys(dr.get("active_ingredient"), dr.get("generic_name"))
+                        rows.append({"application_number": dr["application_number"], "keys": keys, "problem": problem})
+                    await store.set_india_keys(rows)
                 for k in ("new", "updated", "unchanged"):
                     totals[k] += int(result.get(k, 0))
                 for app_no, lb in by_app.items():
@@ -332,6 +341,11 @@ async def run_sync_chunk(
     status = None
     if done:
         status = "PARTIAL" if (totals["failed"] or errors) else "SUCCESS"
+        if store.match_india:
+            try:
+                await store.match_india()  # India (CDSCO) status for new/changed drugs
+            except Exception as exc:
+                errors.append(f"CDSCO check: {exc}")
     elif errors and totals["fetched"] == 0:
         status = "FAILED"
     update: dict[str, Any] = {"id": run_id, **totals, "cursor": cursor, "source_last_updated": _fda_date(source_updated)}

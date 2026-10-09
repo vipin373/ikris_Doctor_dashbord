@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, model_validator
 from ..core.config import get_settings
 from ..core.security import CurrentUser, get_current_user, require_admin
 from ..core.supabase import PostgREST, SupabaseError
-from ..services import bulk_import, fda_service, kegg_service
+from ..services import bulk_import, cdsco_service, fda_service, kegg_service
 from ..services import ai_message_service as ai
 from ..services.audit import audit
 from ..services.doctor_matcher import DRUG_COLUMNS, areas_label, doctor_areas, eligibility, recommend
@@ -25,8 +25,14 @@ router = APIRouter(tags=["fda"])
 LIST_DRUG_COLUMNS = (
     "id,application_number,drug_name,brand_name,generic_name,active_ingredient,manufacturer,therapeutic_area,"
     "therapeutic_areas,department,classification_status,fda_status,approval_date,marketing_status,fda_source,"
-    "drugs_at_fda_url,label_url,last_synced_at"
+    "drugs_at_fda_url,label_url,last_synced_at,india_status,india_evidence"
 )
+INDIA_FILTER = {
+    "not_approved": "in.(NOT_FOUND,MANUAL_NOT_APPROVED)",
+    "approved": "in.(APPROVED,MANUAL_APPROVED)",
+    "unknown": "eq.UNKNOWN",
+    "not_checked": "is.null",
+}
 
 
 # ------------------------------------------------------------------ overview / config
@@ -58,11 +64,16 @@ async def list_drugs(
     department: str | None = Query(None, pattern="^(ONCOLOGY|HEMATOLOGY|RARE_DISEASE|OTHER|NEEDS_REVIEW)$"),
     area: str | None = Query(None, pattern="^(ONCOLOGY|HEMATOLOGY|RARE_DISEASE)$"),
     sendable: bool = False,
+    india: Literal["not_approved", "approved", "unknown", "not_checked", "all"] = "not_approved",
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     user: CurrentUser = Depends(get_current_user),
 ):
     p: list[tuple[str, str]] = [("select", LIST_DRUG_COLUMNS), ("order", "drug_name.asc")]
+    if sendable:
+        india = "not_approved"
+    if india != "all":
+        p.append(("india_status", INDIA_FILTER[india]))
     if q and q.strip():
         term = q.strip().lower().replace("*", "").replace(",", " ")
         p.append(("search_text", f"ilike.*{term}*"))
@@ -186,7 +197,13 @@ def _admin_store(db: PostgREST) -> fda_service.SyncStore:
 
     async def save(run):
         return await db.rpc("fda_sync_run_save", {"p_token": "", "p_run": run})
-    return fda_service.SyncStore(write, save)
+
+    async def keys(rows):
+        return await db.rpc("fda_set_india_keys", {"p_token": "", "p_rows": rows})
+
+    async def match():
+        return await db.rpc("fda_match_india", {"p_token": ""})
+    return fda_service.SyncStore(write, save, keys, match)
 
 
 def _token_store(token: str) -> fda_service.SyncStore:
@@ -197,7 +214,13 @@ def _token_store(token: str) -> fda_service.SyncStore:
 
     async def save(run):
         return await db.rpc("fda_sync_run_save", {"p_token": token, "p_run": run})
-    return fda_service.SyncStore(write, save)
+
+    async def keys(rows):
+        return await db.rpc("fda_set_india_keys", {"p_token": token, "p_rows": rows})
+
+    async def match():
+        return await db.rpc("fda_match_india", {"p_token": token})
+    return fda_service.SyncStore(write, save, keys, match)
 
 
 class SyncIn(BaseModel):
@@ -269,6 +292,59 @@ async def sync_runs(user: CurrentUser = Depends(get_current_user)):
         ("select", "id,status,mode,trigger,started_at,finished_at,new_count,updated_count,unchanged_count,failed_count,fetched_count,errors,source_last_updated"),
         ("order", "started_at.desc"), ("limit", "10")])
     return rows
+
+
+# ------------------------------------------------------------------ India (CDSCO)
+@router.post("/api/fda/cdsco/sync")
+async def cdsco_sync(request: Request, user: CurrentUser = Depends(require_admin)):
+    """Downloads / refreshes the CDSCO approved-new-drug lists (a chunk per call), then
+    marks every drug approved / not found / unknown. Call again while 'done' is false."""
+    db = user.db()
+    try:
+        fetched = await cdsco_service.fetch_documents(db)
+    except Exception as exc:
+        raise HTTPException(502, f"Could not read the CDSCO website: {exc}")
+    if fetched["remaining"]:
+        return {"done": False, **fetched}
+    missing = await db.select_all("fda_drugs", [("select", "application_number,active_ingredient,generic_name"),
+                                                ("india_keys", "is.null")])
+    if missing:
+        await cdsco_service.backfill_keys(lambda fn, rows: db.rpc(fn, {"p_token": "", "p_rows": rows}), missing)
+    result = await db.rpc("fda_match_india", {"p_token": ""})
+    docs, _ = await db.select("cdsco_documents", {"select": "title,pages,text_pages,error"})
+    scanned = [d["title"] for d in docs if d.get("pages") and not d.get("text_pages")]
+    failed = [d["title"] for d in docs if d.get("error")]
+    await audit("CDSCO check", user, "fda_drugs", None, {"result": result, "documents": len(docs)}, request)
+    return {"done": True, **fetched, "result": result, "documents": len(docs), "scanned_without_text": scanned,
+            "failed_documents": failed}
+
+
+@router.get("/api/fda/cdsco/documents")
+async def cdsco_documents(user: CurrentUser = Depends(get_current_user)):
+    rows, _ = await user.db().select("cdsco_documents", [("select", "id,title,url,pages,text_pages,error,fetched_at"),
+                                                          ("order", "id.asc")])
+    return rows
+
+
+class IndiaIn(BaseModel):
+    status: Literal["MANUAL_APPROVED", "MANUAL_NOT_APPROVED", "AUTO"]
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.post("/api/fda/drugs/{drug_id}/india")
+async def set_india(drug_id: str, body: IndiaIn, request: Request, user: CurrentUser = Depends(require_admin)):
+    db = user.db()
+    if body.status == "AUTO":
+        rows = await db.update("fda_drugs", [("id", f"eq.{drug_id}")], {"india_status": None}, returning="id")
+        await db.rpc("fda_match_india", {"p_token": ""})
+    else:
+        rows = await db.update("fda_drugs", [("id", f"eq.{drug_id}")], {
+            "india_status": body.status, "india_evidence": f"Set by {user.email}: {body.reason}",
+            "india_checked_at": datetime.now(timezone.utc).isoformat()}, returning="id")
+    if not rows:
+        raise HTTPException(404, "Drug not found")
+    await audit("India status set", user, "fda_drugs", drug_id, body.model_dump(), request)
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------ settings

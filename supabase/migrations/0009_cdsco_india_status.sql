@@ -1,0 +1,2 @@
+-- India (CDSCO) approval status: see migrations applied as cdsco_india_status and cdsco_matching
+-- (cdsco_documents, cdsco_terms, fda_drugs.india_*, fda_set_india_keys, fda_match_india, fda_overview).

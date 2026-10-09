@@ -11,12 +11,17 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Dialog, EmptyState, ErrorState, Pagination, Skeleton, StatCard, Td, Th } from "@/components/ui/misc";
 import { api } from "@/lib/api";
-import { AREA_LABEL, AREA_TONE, fdaDate, type Classification, type FdaDrug, type FdaOverview, type SyncRun } from "@/lib/fda";
+import { AREA_LABEL, AREA_TONE, fdaDate, INDIA_LABEL, INDIA_TONE, type Classification, type FdaDrug, type FdaOverview, type SyncRun } from "@/lib/fda";
 import { formatDateTime, number } from "@/lib/utils";
 
 export function AreaBadge({ value }: { value?: string | null }) {
   const v = value || "NEEDS_REVIEW";
   return <Badge tone={AREA_TONE[v] ?? "neutral"}>{AREA_LABEL[v] ?? v}</Badge>;
+}
+
+export function IndiaBadge({ value }: { value?: string | null }) {
+  const v = value || "NOT_CHECKED";
+  return <Badge tone={INDIA_TONE[v] ?? "neutral"}>{INDIA_LABEL[v] ?? v}</Badge>;
 }
 
 export function DrugIntelligence() {
@@ -25,6 +30,7 @@ export function DrugIntelligence() {
   const [q, setQ] = React.useState("");
   const [debounced, setDebounced] = React.useState("");
   const [dept, setDept] = React.useState("");
+  const [india, setIndia] = React.useState("not_approved");
   const [page, setPage] = React.useState(1);
   const [openId, setOpenId] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -34,15 +40,16 @@ export function DrugIntelligence() {
 
   const overview = useQuery({ queryKey: ["fda-overview"], queryFn: () => api.get<FdaOverview>("/fda/overview") });
   const drugs = useQuery({
-    queryKey: ["fda-drugs", debounced, dept, page],
-    queryFn: () => api.get<{ items: FdaDrug[]; total: number }>("/fda/drugs", { q: debounced, department: dept, page, page_size: 25 }),
+    queryKey: ["fda-drugs", debounced, dept, india, page],
+    queryFn: () => api.get<{ items: FdaDrug[]; total: number }>("/fda/drugs", { q: debounced, department: dept, india, page, page_size: 25 }),
   });
 
   const by = overview.data?.by_department ?? {};
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Total drugs" value={overview.isLoading ? "…" : number(overview.data?.total)} />
+        <StatCard label="Not approved in India" value={overview.isLoading ? "…" : number(overview.data?.total)}
+          hint={overview.data ? `of ${number(overview.data.total_all)} FDA drugs` : undefined} />
         <StatCard label="Oncology" value={overview.isLoading ? "…" : number(by.ONCOLOGY)} tone="sky" />
         <StatCard label="Hematology" value={overview.isLoading ? "…" : number(by.HEMATOLOGY)} tone="red" />
         <StatCard label="Rare Disease" value={overview.isLoading ? "…" : number(by.RARE_DISEASE)} tone="violet" />
@@ -50,6 +57,11 @@ export function DrugIntelligence() {
         <StatCard label="Needs review" value={overview.isLoading ? "…" : number(overview.data?.needs_review)} tone="amber"
           hint="Never offered for sending" />
       </div>
+
+      <CdscoCard overview={overview.data} isAdmin={me?.role === "ADMIN"} onDone={() => {
+        qc.invalidateQueries({ queryKey: ["fda-overview"] });
+        qc.invalidateQueries({ queryKey: ["fda-drugs"] });
+      }} />
 
       <SyncCard overview={overview.data} isAdmin={me?.role === "ADMIN"} onDone={() => {
         qc.invalidateQueries({ queryKey: ["fda-overview"] });
@@ -70,6 +82,15 @@ export function DrugIntelligence() {
             <option value="OTHER">Other</option>
             <option value="NEEDS_REVIEW">Needs review</option>
           </Select>
+          <Select value={india} onChange={(e) => { setIndia(e.target.value); setPage(1); }} className="w-auto" aria-label="India status">
+            <option value="not_approved">Not approved in India</option>
+            {me?.role === "ADMIN" && <>
+              <option value="unknown">India status: check manually</option>
+              <option value="approved">Approved in India</option>
+              <option value="not_checked">Not checked yet</option>
+              <option value="all">All FDA drugs</option>
+            </>}
+          </Select>
           {me?.role === "ADMIN" && (overview.data?.needs_review ?? 0) > 0 && <AiReviewButton />}
         </div>
         {drugs.error ? <div className="p-4"><ErrorState error={drugs.error} onRetry={() => drugs.refetch()} /></div>
@@ -82,7 +103,7 @@ export function DrugIntelligence() {
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead><tr><Th>Drug</Th><Th>Active ingredient</Th><Th>Department</Th><Th>FDA status</Th><Th>Approval date</Th><Th>Source</Th></tr></thead>
+                  <thead><tr><Th>Drug</Th><Th>Active ingredient</Th><Th>Department</Th><Th>FDA status</Th><Th>Approval date</Th><Th>India (CDSCO)</Th></tr></thead>
                   <tbody>
                     {drugs.data.items.map((d) => (
                       <tr key={d.id} onClick={() => setOpenId(d.id)} className="cursor-pointer hover:bg-slate-50/70">
@@ -99,7 +120,7 @@ export function DrugIntelligence() {
                         </Td>
                         <Td>{d.fda_status ? <Badge tone="green">{d.fda_status}</Badge> : <span className="text-xs text-ink-soft">Not in Drugs@FDA</span>}</Td>
                         <Td className="whitespace-nowrap tabular-nums">{fdaDate(d.approval_date)}</Td>
-                        <Td className="text-xs text-ink-soft">openFDA</Td>
+                        <Td><IndiaBadge value={d.india_status} /></Td>
                       </tr>
                     ))}
                   </tbody>
@@ -111,6 +132,43 @@ export function DrugIntelligence() {
       </Card>
       {openId && <DrugDetail id={openId} onClose={() => setOpenId(null)} />}
     </div>
+  );
+}
+
+function CdscoCard({ overview, isAdmin, onDone }: { overview?: FdaOverview; isAdmin: boolean; onDone: () => void }) {
+  const [running, setRunning] = React.useState<string | null>(null);
+  const india = overview?.india ?? {};
+  const run = async () => {
+    setRunning("Reading CDSCO lists…");
+    try {
+      for (let i = 0; i < 40; i++) {
+        const r = await api.post<{ done: boolean; processed: number; remaining: number; documents_listed: number; result?: Record<string, number>; scanned_without_text?: string[]; errors?: string[] }>("/fda/cdsco/sync");
+        if (!r.done) { setRunning(`Reading CDSCO lists… ${r.documents_listed - r.remaining} of ${r.documents_listed}`); continue; }
+        const res = r.result ?? {};
+        toast.success(`India check done: ${res.NOT_FOUND ?? 0} not approved in India, ${res.APPROVED ?? 0} approved, ${res.UNKNOWN ?? 0} to check manually.`,
+          { description: r.scanned_without_text?.length ? `${r.scanned_without_text.length} CDSCO PDF(s) are scanned images without text and could not be read.` : undefined });
+        break;
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "CDSCO check failed");
+    } finally { setRunning(null); onDone(); }
+  };
+  return (
+    <Card>
+      <CardHeader title="India approval check (CDSCO)"
+        description="Only drugs that do not appear in CDSCO's official lists of new drugs approved in India are shown and offered for messages."
+        action={isAdmin && <Button size="sm" variant="outline" disabled={!!running} onClick={run}>{running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}{running ?? "Check CDSCO approvals"}</Button>} />
+      <CardBody className="grid grid-cols-2 gap-4 text-sm md:grid-cols-5">
+        <Info label="Not approved in India" value={number((india.NOT_FOUND ?? 0) + (india.MANUAL_NOT_APPROVED ?? 0))} />
+        <Info label="Approved in India (hidden)" value={number((india.APPROVED ?? 0) + (india.MANUAL_APPROVED ?? 0))} />
+        <Info label="Check manually (hidden)" value={number(india.UNKNOWN)} />
+        <Info label="CDSCO lists read" value={number(overview?.cdsco_documents)} />
+        <Info label="Last checked" value={overview?.cdsco_checked_at ? formatDateTime(overview.cdsco_checked_at) : "Never"} />
+      </CardBody>
+      <div className="border-t border-line px-5 py-2 text-[11px] text-ink-soft">
+        Source: <a className="underline" href="https://cdsco.gov.in/opencms/opencms/en/Approval_new/Approved-New-Drugs/" target="_blank" rel="noreferrer">CDSCO — List of Approved New Drugs</a>. Absence from these lists is strong evidence, not legal proof; an admin can confirm or correct any drug.
+      </div>
+    </Card>
   );
 }
 
@@ -245,6 +303,16 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
     onError: (e) => toast.error(e instanceof Error ? e.message : "KEGG lookup failed"),
   });
 
+  const india = useMutation({
+    mutationFn: (b: { status: string; reason: string }) => api.post(`/fda/drugs/${id}/india`, b),
+    onSuccess: () => {
+      toast.success("India status saved");
+      qc.invalidateQueries({ queryKey: ["fda-drug", id] });
+      qc.invalidateQueries({ queryKey: ["fda-drugs"] });
+      qc.invalidateQueries({ queryKey: ["fda-overview"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
   const d = data?.drug;
   const current = data?.classifications?.[0];
   return (
@@ -278,12 +346,14 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
             <Field label="Pharmacologic class" value={d.pharm_class?.join("; ")} />
             <Field label="Label effective" value={fdaDate(d.label_effective_date)} />
             <Field label="Last updated" value={formatDateTime(d.last_synced_at)} />
+            <Field label="India (CDSCO)" value={<IndiaBadge value={d.india_status} />} />
             <Field label="KEGG source" value={data?.kegg ? <a className="text-brand-700 underline" href={data.kegg.kegg_source_url} target="_blank" rel="noreferrer">{data.kegg.kegg_id}</a> : (data?.kegg_enabled ? "Not fetched" : "KEGG not enabled")} />
           </dl>
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Indication (FDA label)</p>
             <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-md bg-slate-50 p-3 text-[13px] leading-relaxed text-ink">{d.indication || "Not available"}</p>
           </div>
+          {d.india_evidence && <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-ink-muted"><b>India check:</b> {d.india_evidence}</p>}
           {data?.kegg?.conflict && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{data.kegg.conflict}</p>}
           {current && (
             <div className="rounded-md border border-line p-3 text-xs">
@@ -298,6 +368,9 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
                 <CheckCircle2 className="h-3.5 w-3.5" /> Review classification
               </Button>
               {data?.kegg_enabled && <Button size="sm" variant="outline" disabled={kegg.isPending} onClick={() => kegg.mutate()}>Fetch KEGG reference</Button>}
+              <Button size="sm" variant="outline" disabled={india.isPending} onClick={() => { const r = prompt("Reason (e.g. CDSCO approval letter / not marketed in India):"); if (r && r.length >= 3) india.mutate({ status: "MANUAL_NOT_APPROVED", reason: r }); }}>Mark not approved in India</Button>
+              <Button size="sm" variant="outline" disabled={india.isPending} onClick={() => { const r = prompt("Reason (e.g. CDSCO approval year / reference):"); if (r && r.length >= 3) india.mutate({ status: "MANUAL_APPROVED", reason: r }); }}>Mark approved in India</Button>
+              {d.india_status?.startsWith("MANUAL") && <Button size="sm" variant="ghost" disabled={india.isPending} onClick={() => india.mutate({ status: "AUTO", reason: "Back to automatic CDSCO check" })}>Use automatic check</Button>}
             </div>
           )}
           {review && (

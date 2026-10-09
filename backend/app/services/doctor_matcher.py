@@ -9,11 +9,13 @@ from typing import Any
 from .drug_classifier import AREA_LABEL, HEMATOLOGY, ONCOLOGY, RARE_DISEASE
 
 SENDABLE_CLASSIFICATION = ("CLASSIFIED", "APPROVED")
+# Only drugs that are not approved in India (per CDSCO lists or a manual decision) are offered.
+NOT_IN_INDIA = ("NOT_FOUND", "MANUAL_NOT_APPROVED")
 DRUG_COLUMNS = (
     "id,application_number,drug_name,brand_name,generic_name,active_ingredient,manufacturer,dosage_form,strength,route,"
     "indication,therapeutic_area,therapeutic_areas,department,classification_status,fda_status,approval_date,"
     "latest_action_date,marketing_status,fda_source,fda_source_url,drugs_at_fda_url,label_url,last_synced_at,"
-    "retrieved_at,review_flags"
+    "retrieved_at,review_flags,india_status,india_evidence"
 )
 
 
@@ -59,6 +61,10 @@ def drug_sendable(drug: dict[str, Any]) -> str | None:
         return "Drug classification requires review."
     if not drug.get("fda_status"):
         return "FDA approval status is not available for this drug."
+    if drug.get("india_status") not in NOT_IN_INDIA:
+        return ("This drug is approved in India (CDSCO), so it is not offered."
+                if drug.get("india_status") in ("APPROVED", "MANUAL_APPROVED")
+                else "India (CDSCO) approval status has not been confirmed for this drug.")
     return None
 
 
@@ -77,6 +83,7 @@ async def recommend(db, doctor: dict[str, Any], limit: int = 12, q: str | None =
         ("therapeutic_areas", "ov.{" + ",".join(areas) + "}"),
         ("classification_status", f"in.({','.join(SENDABLE_CLASSIFICATION)})"),
         ("fda_status", "not.is.null"),
+        ("india_status", f"in.({','.join(NOT_IN_INDIA)})"),
         ("order", "latest_action_date.desc.nullslast,drug_name.asc"),
         ("limit", "200"),
     ]

@@ -15,7 +15,7 @@ from fastapi import HTTPException
 from ..core.security import CurrentUser
 from . import ai_message_service as ai
 from . import email_service, whatsapp_service
-from .doctor_matcher import (DRUG_COLUMNS, SENDABLE_CLASSIFICATION, areas_label, doctor_areas, drug_relevant,
+from .doctor_matcher import (DRUG_COLUMNS, NOT_IN_INDIA, SENDABLE_CLASSIFICATION, areas_label, doctor_areas, drug_relevant,
                              drug_sendable, eligibility, pick_auto_drug)
 from .message_render import (context_for, email_document, fact_guard, html_to_text, looks_like_html, plain_to_html,
                              render, unresolved)
@@ -102,7 +102,8 @@ async def create_campaign(db, user: CurrentUser, body: dict[str, Any]) -> dict[s
     if not manual_drug:
         candidates, _ = await db.select("fda_drugs", [
             ("select", LIGHT_DRUG_COLUMNS), ("classification_status", f"in.({','.join(SENDABLE_CLASSIFICATION)})"),
-            ("fda_status", "not.is.null"), ("order", "latest_action_date.desc.nullslast,drug_name.asc"), ("limit", "3000"),
+            ("fda_status", "not.is.null"), ("india_status", f"in.({','.join(NOT_IN_INDIA)})"),
+            ("order", "latest_action_date.desc.nullslast,drug_name.asc"), ("limit", "3000"),
         ])
         history = await _in_chunks(db, "message_logs", "doctor_id", [d["id"] for d in doctors], "doctor_id,drug_id,sent_at,status")
         for h in history:
