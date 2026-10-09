@@ -136,11 +136,21 @@ async def fetch_documents(db, budget_seconds: float = 38.0) -> dict[str, Any]:
                 break
             now = datetime.now(timezone.utc).isoformat()
             try:
-                r = await client.get(d["url"])
+                r = await client.get(d["url"], headers={"Referer": LIST_PAGE})
                 r.raise_for_status()
                 data = r.content
                 if not data.startswith(b"%PDF"):
-                    raise ValueError("CDSCO returned a page instead of a PDF")
+                    # the download page embeds the PDF in an iframe
+                    m = re.search(r"""<iframe[^>]+src=['"]([^'"]+)['"]""", r.text, re.I)
+                    if not m:
+                        raise ValueError("CDSCO returned a page without a PDF")
+                    from urllib.parse import quote, urljoin
+                    pdf_url = urljoin("https://cdsco.gov.in", quote(m.group(1), safe="/:%()&=?_-.,"))
+                    r = await client.get(pdf_url, headers={"Referer": LIST_PAGE})
+                    r.raise_for_status()
+                    data = r.content
+                    if not data.startswith(b"%PDF"):
+                        raise ValueError("CDSCO file is not a PDF")
                 sha = hashlib.sha256(data).hexdigest()
                 if known.get(d["url"], {}).get("sha256") == sha:
                     await db.update("cdsco_documents", [("url", f"eq.{d['url']}")], {"fetched_at": now})
