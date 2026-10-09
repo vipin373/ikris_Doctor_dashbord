@@ -27,7 +27,7 @@ from urllib.parse import quote
 import httpx
 
 from ..core.config import get_settings
-from .drug_classifier import TERMS, classify
+from .drug_classifier import CLASSIFIER_VERSION, TERMS, classify
 
 log = logging.getLogger("fda")
 
@@ -227,6 +227,7 @@ def build_drug(app_no: str, label: dict[str, Any], app: dict[str, Any]) -> dict[
         if app else None,
         "label_url": f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={label['set_id']}" if label.get("set_id") else None,
         "review_flags": flags,
+        "classifier": CLASSIFIER_VERSION,  # re-syncing after a classifier change reclassifies
     }
     row["record_hash"] = record_hash(row)
     row["classification"] = classify(indication_full).as_dict()

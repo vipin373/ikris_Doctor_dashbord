@@ -67,10 +67,16 @@ TERMS: dict[str, list[tuple[str, bool]]] = {
     ],
 }
 
-_PATTERNS = {
-    area: [(t, strong, re.compile(r"(?<![a-z])" + re.escape(t) + r"(?:s|es)?(?![a-z])", re.I)) for t, strong in terms]
-    for area, terms in TERMS.items()
-}
+CLASSIFIER_VERSION = "rules-v2"
+PROMINENT_CHARS = 400  # evidence near the start of the indication is the main use, not a passing mention
+
+
+def _term_regex(term: str) -> re.Pattern:
+    body = r"[\s-]+".join(re.escape(part) for part in re.split(r"[\s-]+", term))
+    return re.compile(r"(?<![a-z])" + body + r"(?:s|es)?(?![a-z])", re.I)
+
+
+_PATTERNS = {area: [(t, strong, _term_regex(t)) for t, strong in terms] for area, terms in TERMS.items()}
 
 
 @dataclass
@@ -100,15 +106,18 @@ class Classification:
         }
 
 
-def find_terms(text: str) -> dict[str, list[tuple[str, bool]]]:
-    """Area -> [(matched phrase as written in the label, strong)]."""
+def find_terms(text: str, positions: dict[str, int] | None = None) -> dict[str, list[tuple[str, bool]]]:
+    """Area -> [(matched phrase as written in the label, strong)]. Optionally
+    records the first position of a strong phrase per area."""
     found: dict[str, list[tuple[str, bool]]] = {}
     for area, patterns in _PATTERNS.items():
         hits: dict[str, bool] = {}
         for _term, strong, pattern in patterns:
             for m in pattern.finditer(text):
-                phrase = m.group(0).lower()
+                phrase = re.sub(r"\s+", " ", m.group(0).lower())
                 hits[phrase] = hits.get(phrase, False) or strong
+                if strong and positions is not None:
+                    positions[area] = min(positions.get(area, len(text)), m.start())
         if hits:
             found[area] = sorted(hits.items())
     return found
@@ -119,7 +128,8 @@ def classify(indication: str | None) -> Classification:
     if len(text) < 20:
         return Classification(NEEDS_REVIEW, [], 0.0, "The FDA label has no usable Indications and Usage text.")
 
-    found = find_terms(text)
+    first: dict[str, int] = {}
+    found = find_terms(text, first)
     strong = {a: [p for p, s in hits if s] for a, hits in found.items()}
     strong_areas = [a for a in AREAS if strong.get(a)]
     weak_only = [a for a in AREAS if found.get(a) and not strong.get(a)]
@@ -141,6 +151,13 @@ def classify(indication: str | None) -> Classification:
     primary = sorted(strong_areas, key=lambda a: (-len(strong[a]), PRIORITY[a]))[0]
     areas = sorted(strong_areas, key=lambda a: PRIORITY[a])
     evidence = [p for a in areas for p in strong[a]]
+    prominent = len(strong[primary]) >= 2 or first.get(primary, len(text)) < PROMINENT_CHARS
+    if not prominent:
+        return Classification(
+            NEEDS_REVIEW, areas, 0.6,
+            f"Only a passing mention ({strong[primary][0]}) late in the FDA indication; a person should confirm "
+            f"whether this drug is relevant to {AREA_LABEL[primary]}.", evidence,
+        )
     if len(areas) == 1:
         confidence = 0.95 if len(strong[primary]) >= 2 else 0.9
         reason = f"FDA indication refers to {AREA_LABEL[primary].lower()} conditions: " + ", ".join(strong[primary][:6]) + "."

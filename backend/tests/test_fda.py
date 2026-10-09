@@ -218,3 +218,16 @@ def test_bulk_rejects_bad_files():
         bulk_import.read_table("x.pdf", b"%PDF")
     with pytest.raises(bulk_import.UploadError):
         bulk_import.read_table("x.xlsx", b"not a zip")
+
+
+def test_hyphen_and_space_variants_match():
+    c = classify("indicated for the treatment of steroid-refractory acute graft versus host disease in pediatric patients.")
+    assert c.department == "HEMATOLOGY"
+
+
+def test_passing_late_mention_needs_review():
+    text = ("indicated in adults and pediatric patients as replacement therapy in primary, secondary and tertiary "
+            "congenital or acquired hypothyroidism, and for pituitary thyrotropin suppression. " * 4
+            + "Also as an adjunct to surgery and radioiodine therapy in thyroid cancer.")
+    c = classify(text)
+    assert c.review_status == "NEEDS_REVIEW" and c.therapeutic_areas == ["ONCOLOGY"]
