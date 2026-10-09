@@ -46,13 +46,15 @@ def _parse(resp: httpx.Response) -> ProviderResult:
         body = {"raw": resp.text[:1000]}
     if not isinstance(body, dict):
         body = {"raw": body}
+    # Cunnekt wraps the WhatsApp Cloud API reply: {"status": true, "data": {"messages": [{"id": ...}]}}
+    inner = body.get("data") if isinstance(body.get("data"), dict) else body
     msg_id = None
-    msgs = body.get("messages")
+    msgs = inner.get("messages")
     if isinstance(msgs, list) and msgs and isinstance(msgs[0], dict):
         msg_id = msgs[0].get("id")
-    msg_id = msg_id or body.get("message_id") or body.get("id")
+    msg_id = msg_id or inner.get("message_id") or inner.get("id") or body.get("message_id")
     error = None
-    err = body.get("error") or body.get("errors")
+    err = body.get("error") or body.get("errors") or inner.get("error") or inner.get("errors")
     if isinstance(err, dict):
         error = err.get("message") or err.get("error_user_msg") or err.get("title") or str(err)
     elif isinstance(err, list) and err:
@@ -60,6 +62,8 @@ def _parse(resp: httpx.Response) -> ProviderResult:
     elif isinstance(err, str):
         error = err
     status_flag = str(body.get("status", "")).lower()
+    if status_flag == "true":
+        status_flag = ""
     if resp.status_code >= 400 or error or status_flag in ("error", "failed", "false") or not msg_id:
         error = error or body.get("message") or body.get("msg") or (
             f"HTTP {resp.status_code}" + ("" if msg_id else " (no message id returned)"))

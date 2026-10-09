@@ -241,3 +241,21 @@ def test_source_row_key_survives_cell_edits():
     assert [r.row_key for r in before.doctors] == [r.row_key for r in after.doctors]
     assert before.doctors[0].row_key != before.doctors[1].row_key
     assert after.doctors[0].fields["whatsapp_number"] == "918448645084"
+
+
+def test_cunnekt_wrapped_response():
+    class R:
+        status_code = 200
+        text = ""
+
+        def __init__(self, b):
+            self._b = b
+
+        def json(self):
+            return self._b
+
+    ok = _parse(R({"data": {"contacts": [{"input": "918448645084", "wa_id": "918448645084"}],
+                            "messages": [{"id": "wamid.HBgM"}], "messaging_product": "whatsapp"}, "status": True}))
+    assert ok.ok and ok.provider_message_id == "wamid.HBgM"
+    bad = _parse(R({"status": False, "message": "You can not send message out side of message window."}))
+    assert not bad.ok and "message window" in bad.error
