@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from ..core.config import get_settings
 from ..core.security import CurrentUser, require_admin
-from ..core.supabase import ServiceUnavailable, SupabaseError
+from ..core.supabase import PostgREST, ServiceUnavailable, SupabaseError
 from ..services.audit import audit
 from ..services import sheet_bridge
 from ..services.google_sheets_service import SheetReadError
@@ -63,7 +63,14 @@ async def cron_sync(request: Request):
     header = request.headers.get("authorization", "")
     if not secret or not hmac.compare_digest(header, f"Bearer {secret}"):
         raise HTTPException(401, "Unauthorized")
-    return await _sync(None, "scheduled", request)
+    result = await _sync(None, "scheduled", request)
+    # The separate New Doctors (Apollo) sheet is refreshed on its own, into its own table.
+    try:
+        from ..services import new_doctors_service
+        result["new_doctors"] = await new_doctors_service.sync(PostgREST.service())
+    except Exception as exc:  # never fail the main sync because of it
+        result["new_doctors"] = {"error": str(exc)[:200]}
+    return result
 
 
 class TabUpdate(BaseModel):

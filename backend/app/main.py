@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import calendar, campaigns, core, doctors, fda, fda_templates, google_sheets, templates
+from .api import calendar, campaigns, core, doctors, fda, fda_templates, google_sheets, new_doctors, templates
 from .core.config import get_settings
 from .core.security import client_ip, rate_limiter
 from .core.supabase import ServiceUnavailable, SupabaseError
@@ -77,5 +77,6 @@ app.include_router(calendar.reminders_router)
 app.include_router(fda.router)
 app.include_router(fda_templates.router)
 app.include_router(campaigns.router)
+app.include_router(new_doctors.router)
 
 _ = HTTPException
