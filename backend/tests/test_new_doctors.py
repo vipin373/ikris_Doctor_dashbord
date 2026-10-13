@@ -33,3 +33,10 @@ def test_summary():
                         ["B", "Hema", "", "", "", "Failed", "", "", "bounce", "", "", ""]])
     s = summarize(rows)
     assert s["total"] == 2 and s["sent"] == 1 and s["errors"] == 1 and s["follow_up_pending"] == 1
+
+
+def test_drug_with_ingredient():
+    from app.services.message_render import drug_with_ingredient
+    assert drug_with_ingredient({"drug_name": "Jaypirca", "active_ingredient": "PIRTOBRUTINIB"}) == "Jaypirca (Pirtobrutinib)"
+    assert drug_with_ingredient({"drug_name": "Pirtobrutinib", "active_ingredient": "pirtobrutinib"}) == "Pirtobrutinib"
+    assert drug_with_ingredient({"active_ingredient": "x"}) == "x"

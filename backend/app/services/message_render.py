@@ -24,6 +24,7 @@ VARIABLES: list[tuple[str, str, str]] = [
     ("drug_name", "FDA", "Drug name (FDA)"),
     ("brand_name", "FDA", "Brand name (FDA)"),
     ("active_ingredient", "FDA", "Active ingredient (FDA)"),
+    ("drug_with_ingredient", "FDA", "Drug name with active ingredient, e.g. Jaypirca (Pirtobrutinib)"),
     ("indication", "FDA", "Indication, short (first part of the FDA label indication)"),
     ("indication_full", "FDA", "Indication, full FDA label text (long; best for email)"),
     ("therapeutic_area", "FDA", "Therapeutic area"),
@@ -78,6 +79,14 @@ def indication_summary(text: str | None, limit: int = 320) -> str | None:
     return t
 
 
+def drug_with_ingredient(drug: dict) -> str | None:
+    name = drug.get("drug_name") or drug.get("brand_name")
+    ing = drug.get("active_ingredient") or drug.get("generic_name")
+    if name and ing and ing.strip().lower() not in name.lower():
+        return f"{name} ({ing.strip().title() if ing.isupper() else ing.strip()})"
+    return name or ing
+
+
 def context_for(doctor: dict | None, drug: dict | None, sender: dict | None) -> dict[str, str | None]:
     doctor = doctor or {}
     drug = drug or {}
@@ -92,6 +101,7 @@ def context_for(doctor: dict | None, drug: dict | None, sender: dict | None) -> 
         "drug_name": drug.get("drug_name"),
         "brand_name": drug.get("brand_name"),
         "active_ingredient": drug.get("active_ingredient") or drug.get("generic_name"),
+        "drug_with_ingredient": drug_with_ingredient(drug),
         "indication": indication_summary(drug.get("indication")),
         "indication_full": drug.get("indication"),
         "therapeutic_area": area,
