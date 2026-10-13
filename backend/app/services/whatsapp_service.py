@@ -96,7 +96,9 @@ async def send_text(to: str, body: str) -> ProviderResult:
 async def send_template(to: str, template_name: str, language: str, params: list[str]) -> ProviderResult:
     template: dict[str, Any] = {"name": template_name, "language": {"code": language or "en"}}
     if params:
-        template["components"] = [{"type": "body", "parameters": [{"type": "text", "text": p} for p in params]}]
+        # WhatsApp rejects template parameters containing new lines, tabs or 4+ spaces in a row.
+        clean = [re.sub(r"\s+", " ", str(p)).strip()[:1000] for p in params]
+        template["components"] = [{"type": "body", "parameters": [{"type": "text", "text": p} for p in clean]}]
     return await _post("sendtemplate", {
         "messaging_product": "whatsapp", "recipient_type": "individual", "to": to,
         "type": "template", "template": template,

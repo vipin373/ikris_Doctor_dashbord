@@ -372,6 +372,18 @@ async def send_one(db, user: CurrentUser, message_id: str) -> dict[str, Any]:
         use_template = bool(template and template.get("whatsapp_template_name")
                             and template.get("whatsapp_approval_status") == "APPROVED" and m["method"] == "TEMPLATE")
         provider = "CUNNEKT"
+        if use_template:
+            # Messages generated before the template was approved carry no parameters;
+            # fill {{1}}, {{2}}, ... from the same data the message body was built from.
+            wa_vars = list(template.get("whatsapp_variables") or [])
+            params = list(m.get("whatsapp_params") or [])
+            if len(params) != len(wa_vars):
+                ctx = context_for(doctor, drug, sender)
+                missing = [v for v in wa_vars if not ctx.get(v)]
+                if missing:
+                    return await _fail_before_send(db, m, "WhatsApp template values missing: " + ", ".join(missing))
+                params = [str(ctx[v]) for v in wa_vars]
+            m = {**m, "whatsapp_params": params}
     else:
         text = html_to_text(m["body"])
         provider = "SMTP"
