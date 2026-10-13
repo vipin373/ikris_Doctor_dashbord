@@ -65,11 +65,15 @@ async def list_drugs(
     area: str | None = Query(None, pattern="^(ONCOLOGY|HEMATOLOGY|RARE_DISEASE)$"),
     sendable: bool = False,
     india: Literal["not_approved", "approved", "unknown", "not_checked", "all"] = "not_approved",
+    sort: Literal["newest", "latest_action", "name"] = "newest",
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     user: CurrentUser = Depends(get_current_user),
 ):
-    p: list[tuple[str, str]] = [("select", LIST_DRUG_COLUMNS), ("order", "drug_name.asc")]
+    order = {"newest": "approval_date.desc.nullslast,drug_name.asc",
+             "latest_action": "latest_action_date.desc.nullslast,drug_name.asc",
+             "name": "drug_name.asc"}[sort]
+    p: list[tuple[str, str]] = [("select", LIST_DRUG_COLUMNS + ",latest_action_date"), ("order", order)]
     if sendable:
         india = "not_approved"
     if india != "all":
@@ -87,6 +91,16 @@ async def list_drugs(
         p += [("classification_status", "in.(CLASSIFIED,APPROVED)"), ("fda_status", "not.is.null")]
     rows, total = await user.db().select("fda_drugs", p, count=True, offset=(page - 1) * page_size, limit=page_size)
     return {"items": rows, "total": total or 0, "page": page, "page_size": page_size}
+
+
+@router.get("/api/fda/new-molecules")
+async def new_molecules(days: int = Query(365, ge=7, le=1825), include_india_approved: bool = False,
+                        user: CurrentUser = Depends(get_current_user)):
+    """First FDA approval of an active ingredient within the last `days` (newest first)."""
+    rows = await user.db().rpc("new_molecules", {"p_days": days})
+    if not include_india_approved:
+        rows = [r for r in rows if r.get("india_status") in ("NOT_FOUND", "MANUAL_NOT_APPROVED")]
+    return rows
 
 
 @router.get("/api/fda/drugs/{drug_id}")

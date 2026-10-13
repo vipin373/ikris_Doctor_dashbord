@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Briefcase, Cake, CalendarClock, ChevronLeft, ChevronRight, Mail, MessageCircle, MessageSquareHeart, Plus, Settings2, Trash2 } from "lucide-react";
+import { Bell, Briefcase, Cake, CalendarClock, ChevronLeft, ChevronRight, Mail, MessageCircle, MessageSquareHeart, Plus, Settings2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { Badge, departmentTone, statusTone } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ type DayInfo = {
   outreach: CalendarData["outreach"];
   feedback: CalendarData["feedback"];
   schedule: CalendarData["schedule"];
+  followUps: NonNullable<CalendarData["follow_ups"]>;
 };
 
 export default function CalendarPage() {
@@ -54,11 +55,12 @@ export default function CalendarPage() {
 
   const byDay = React.useMemo(() => {
     const map: Record<string, DayInfo> = {};
-    const get = (d: string) => (map[d] ||= { people: [], outreach: [], feedback: [], schedule: [] });
+    const get = (d: string) => (map[d] ||= { people: [], outreach: [], feedback: [], schedule: [], followUps: [] });
     cal.data?.dates.forEach((x) => get(x.date).people.push(x));
     cal.data?.outreach.forEach((x) => get(x.date).outreach.push(x));
     cal.data?.feedback.forEach((x) => get(x.date).feedback.push(x));
     cal.data?.schedule.forEach((x) => get(x.date).schedule.push(x));
+    cal.data?.follow_ups?.forEach((x) => get(x.date).followUps.push(x));
     return map;
   }, [cal.data]);
 
@@ -113,6 +115,7 @@ export default function CalendarPage() {
               <Legend icon={Mail} cls="text-emerald-700" label="Emails sent" />
               <Legend icon={MessageSquareHeart} cls="text-sky-700" label="Feedback" />
               <Legend icon={CalendarClock} cls="text-violet-700" label="Scheduled" />
+              <Legend icon={Bell} cls="text-red-700" label="Follow-up due" />
               <Button size="sm" variant="outline" onClick={() => { setMonth(today.slice(0, 7)); setSelected(today); }}>Today</Button>
             </div>
           </div>
@@ -141,6 +144,9 @@ export default function CalendarPage() {
                       {births > 0 && <Chip icon={Cake} cls="bg-pink-50 text-pink-700" text={births === 1 ? info!.people.find((p) => p.kind === "birthday")!.doctor_name : `${births} birthdays`} />}
                       {annivs > 0 && <Chip icon={Briefcase} cls="bg-indigo-50 text-indigo-700" text={annivs === 1 ? info!.people.find((p) => p.kind === "anniversary")!.doctor_name : `${annivs} anniversaries`} />}
                       {info?.schedule.map((s) => <Chip key={s.name} icon={CalendarClock} cls="bg-violet-50 text-violet-700" text={s.name} />)}
+                      {(info?.followUps.reduce((n, x) => n + x.count, 0) ?? 0) > 0 && (
+                        <Chip icon={Bell} cls="bg-red-50 text-red-700" text={`${info!.followUps.reduce((n, x) => n + x.count, 0)} follow-ups due`} />
+                      )}
                       {sent > 0 && <Chip icon={Mail} cls="bg-emerald-50 text-emerald-700" text={`${sent} sent${failed ? ` · ${failed} failed` : ""}`} />}
                       {sent === 0 && failed > 0 && <Chip icon={Mail} cls="bg-red-50 text-red-700" text={`${failed} failed`} />}
                       {fb > 0 && <Chip icon={MessageSquareHeart} cls="bg-sky-50 text-sky-700" text={`${fb} feedback`} />}
@@ -167,6 +173,16 @@ export default function CalendarPage() {
                           {p.kind === "birthday" ? <Cake className="h-4 w-4 text-pink-600" /> : <Briefcase className="h-4 w-4 text-indigo-600" />}
                           <span className="flex-1 font-medium text-ink">{p.doctor_name}</span>
                           <Badge tone={departmentTone(p.department)}>{p.sub_department || DEPARTMENT_LABEL[p.department]}</Badge>
+                        </Link>
+                      ))}
+                    </Section>
+                  )}
+                  {day.followUps.length > 0 && (
+                    <Section title="Follow-up emails due">
+                      {day.followUps.map((x) => (
+                        <Link key={x.department} href="/reminders" className="flex items-center justify-between rounded px-1 py-1 text-sm hover:bg-slate-50">
+                          <span className="text-ink">{DEPARTMENT_LABEL[x.department]}</span>
+                          <Badge tone="red">{x.count} doctor{x.count === 1 ? "" : "s"}</Badge>
                         </Link>
                       ))}
                     </Section>

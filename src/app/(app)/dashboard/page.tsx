@@ -4,16 +4,44 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, Cake, Dna, HeartPulse, Mail, MessageSquareHeart, Send, Stethoscope, Users } from "lucide-react";
+import { AlertTriangle, Bell, Cake, Dna, HeartPulse, Mail, MessageSquareHeart, Send, Stethoscope, Users } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState, ErrorState, PageHeader, Skeleton, StatCard } from "@/components/ui/misc";
 import { api } from "@/lib/api";
 import type { DashboardSummary } from "@/lib/types";
 import { number } from "@/lib/utils";
+import type { RemindersData } from "@/components/reminders-shared";
 
 const COLORS = ["#172A5C", "#4C6FB5", "#8FA8D8", "#2F8F83", "#C08A2B", "#B04A5A", "#6E5BA8", "#7C8DA6"];
 const STATUS_COLORS: Record<string, string> = { Sent: "#2F8F83", Failed: "#B04A5A", "Not sent": "#C08A2B", Duplicate: "#C08A2B" };
+
+function RemindersStrip() {
+  const { data } = useQuery({ queryKey: ["reminders"], queryFn: () => api.get<RemindersData>("/reminders") });
+  if (!data) return null;
+  const f = data.follow_ups;
+  const overdue = f.filter((x) => x.bucket === "overdue").length;
+  const soon = f.filter((x) => x.bucket === "today" || x.bucket === "week").length;
+  const failed = f.filter((x) => x.failed?.length).length;
+  const mols = data.new_molecules.filter((m) => (new Date(data.today).getTime() - new Date(m.approval_date).getTime()) / 86400000 <= 90);
+  const items = [
+    { n: overdue, text: "follow-up emails overdue", tone: "text-red-700 bg-red-50 border-red-200", show: overdue > 0 },
+    { n: soon, text: "follow-ups due in the next 7 days", tone: "text-amber-800 bg-amber-50 border-amber-200", show: soon > 0 },
+    { n: failed, text: "doctors with a failed email", tone: "text-red-700 bg-red-50 border-red-200", show: failed > 0 },
+    { n: data.important_dates.length, text: "birthdays / anniversaries this week", tone: "text-violet-800 bg-violet-50 border-violet-200", show: data.important_dates.length > 0 },
+    { n: mols.length, text: "new FDA molecules (not approved in India)", tone: "text-emerald-800 bg-emerald-50 border-emerald-200", show: mols.length > 0 },
+  ].filter((i) => i.show);
+  if (!items.length) return null;
+  return (
+    <Link href="/reminders" className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-white px-4 py-3 shadow-card hover:border-brand-200">
+      <span className="mr-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><Bell className="h-4 w-4 text-brand-700" /> Reminders</span>
+      {items.map((i) => (
+        <span key={i.text} className={`rounded-full border px-2.5 py-1 text-xs font-medium ${i.tone}`}><b>{number(i.n)}</b> {i.text}</span>
+      ))}
+      <span className="ml-auto text-xs font-medium text-brand-700">Open reminders →</span>
+    </Link>
+  );
+}
 
 export default function DashboardPage() {
   const { me } = useAuth();
@@ -46,6 +74,7 @@ export default function DashboardPage() {
         title={title}
         description={me?.role === "ADMIN" ? "All departments: NPP and Rare Diseases." : "Figures cover your department only."}
       />
+      <RemindersStrip />
       {isLoading || !data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-24" />)}

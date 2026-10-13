@@ -68,8 +68,14 @@ async def month_view(month: str = Query(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
                     "department": item.get("department"), "time": item.get("time") or None, "note": item.get("note"),
                 })
 
+    follow = await db.rpc("follow_up_reminders")
+    due: Counter = Counter()
+    for f in follow:
+        if f.get("due_date") and start.isoformat() <= f["due_date"] < end.isoformat():
+            due[(f["due_date"], f["department"])] += 1
     return {
         "month": month,
+        "follow_ups": [{"date": k[0], "department": k[1], "count": v} for k, v in sorted(due.items())],
         "dates": dates,
         "outreach": [
             {"date": k[0], "department": k[1], "channel": k[2], "campaign": k[3], "status": k[4], "count": v}
@@ -124,3 +130,60 @@ async def save_schedule(items: list[ScheduleItem], request: Request, user: Curre
     }, on_conflict="key", resolution="merge-duplicates")
     await audit("Settings changed", user, "automation_schedule", None, {"items": len(clean)}, request)
     return clean
+
+
+# ------------------------------------------------------------------ reminders
+reminders_router = APIRouter(prefix="/api/reminders", tags=["reminders"])
+
+
+def _today_ist() -> date:
+    return datetime.now(IST).date()
+
+
+@reminders_router.get("")
+async def reminders(user: CurrentUser = Depends(get_current_user)):
+    """Everything that needs action: follow-up emails due, failed emails, doctors eligible
+    again for FDA messages, birthdays/anniversaries this week and new FDA molecules."""
+    db = user.db()
+    today = _today_ist()
+    follow = await db.rpc("follow_up_reminders")
+    for f in follow:
+        due = date.fromisoformat(f["due_date"]) if f.get("due_date") else None
+        f["days_overdue"] = (today - due).days if due else None
+        f["bucket"] = ("failed" if not f.get("last_sent_at") else
+                       "overdue" if due and due < today else
+                       "today" if due == today else
+                       "week" if due and due <= today + timedelta(days=7) else "later")
+    follow.sort(key=lambda f: (not f.get("must_see"), f["due_date"] or "9999"))
+    soon = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fda_eligible, _ = await db.select("doctors", [
+        ("select", "id,doctor_name,department,sub_department,institute,must_see,last_message_sent_at,next_eligible_at,contact_frequency"),
+        ("last_message_sent_at", "not.is.null"), ("or", f"(next_eligible_at.is.null,next_eligible_at.lte.{soon})"),
+        ("order", "must_see.desc,next_eligible_at.asc.nullsfirst"), ("limit", "200")])
+    dates = await db.rpc("upcoming_dates", {"p_days": 7})
+    molecules = [m for m in await db.rpc("new_molecules", {"p_days": 365})
+                 if m.get("india_status") in ("NOT_FOUND", "MANUAL_NOT_APPROVED")]
+    settings_rows, _ = await db.select("app_settings", {"key": "eq.reminder_settings", "select": "value"})
+    return {
+        "today": today.isoformat(),
+        "follow_ups": follow,
+        "fda_eligible": fda_eligible,
+        "important_dates": dates,
+        "new_molecules": molecules,
+        "settings": (settings_rows[0]["value"] if settings_rows else {}) or {"npp_days": 20, "rare_days": 15},
+    }
+
+
+class ReminderSettings(BaseModel):
+    npp_days: int = Field(ge=1, le=365)
+    rare_days: int = Field(ge=1, le=365)
+
+
+@reminders_router.put("/settings")
+async def save_reminder_settings(body: ReminderSettings, request: Request, user: CurrentUser = Depends(require_admin)):
+    await user.db().insert("app_settings", {
+        "key": "reminder_settings", "value": body.model_dump(), "updated_by": user.id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="key", resolution="merge-duplicates")
+    await audit("Settings changed", user, "reminder_settings", None, body.model_dump(), request)
+    return body.model_dump()

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
-  Activity, BarChart3, Briefcase, Cake, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
+  Activity, BarChart3, Bell, Briefcase, Cake, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
   Menu, MessageSquareHeart, Pill, Search, Shield, Stethoscope, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
@@ -29,6 +29,7 @@ function useNav(): NavItem[] {
 
   const items: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/reminders", label: "Reminders", icon: Bell },
     { href: "/doctors", label: "Doctors", icon: Stethoscope },
   ];
   if (me.departments.includes("NPP")) {

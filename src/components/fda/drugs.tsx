@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ExternalLink, Loader2, RefreshCw, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { MoleculeList, type NewMolecule } from "@/components/reminders-shared";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth-provider";
 import { Badge, statusTone } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ export function DrugIntelligence() {
   const [debounced, setDebounced] = React.useState("");
   const [dept, setDept] = React.useState("");
   const [india, setIndia] = React.useState("not_approved");
+  const [sort, setSort] = React.useState("newest");
   const [page, setPage] = React.useState(1);
   const [openId, setOpenId] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -40,8 +42,8 @@ export function DrugIntelligence() {
 
   const overview = useQuery({ queryKey: ["fda-overview"], queryFn: () => api.get<FdaOverview>("/fda/overview") });
   const drugs = useQuery({
-    queryKey: ["fda-drugs", debounced, dept, india, page],
-    queryFn: () => api.get<{ items: FdaDrug[]; total: number }>("/fda/drugs", { q: debounced, department: dept, india, page, page_size: 25 }),
+    queryKey: ["fda-drugs", debounced, dept, india, sort, page],
+    queryFn: () => api.get<{ items: FdaDrug[]; total: number }>("/fda/drugs", { q: debounced, department: dept, india, sort, page, page_size: 25 }),
   });
 
   const by = overview.data?.by_department ?? {};
@@ -57,6 +59,8 @@ export function DrugIntelligence() {
         <StatCard label="Needs review" value={overview.isLoading ? "…" : number(overview.data?.needs_review)} tone="amber"
           hint="Never offered for sending" />
       </div>
+
+      <NewMoleculesCard />
 
       <CdscoCard overview={overview.data} isAdmin={me?.role === "ADMIN"} onDone={() => {
         qc.invalidateQueries({ queryKey: ["fda-overview"] });
@@ -81,6 +85,11 @@ export function DrugIntelligence() {
             <option value="RARE_DISEASE">Rare Disease</option>
             <option value="OTHER">Other</option>
             <option value="NEEDS_REVIEW">Needs review</option>
+          </Select>
+          <Select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }} className="w-auto" aria-label="Sort">
+            <option value="newest">Newest FDA approval first</option>
+            <option value="latest_action">Latest FDA action first</option>
+            <option value="name">Name A–Z</option>
           </Select>
           <Select value={india} onChange={(e) => { setIndia(e.target.value); setPage(1); }} className="w-auto" aria-label="India status">
             <option value="not_approved">Not approved in India</option>
@@ -108,7 +117,10 @@ export function DrugIntelligence() {
                     {drugs.data.items.map((d) => (
                       <tr key={d.id} onClick={() => setOpenId(d.id)} className="cursor-pointer hover:bg-slate-50/70">
                         <Td>
-                          <p className="font-medium text-ink">{d.drug_name}</p>
+                          <p className="font-medium text-ink">
+                            {isNew(d.approval_date) && <span className="mr-1.5 rounded bg-emerald-600 px-1.5 py-0.5 align-middle text-[10px] font-bold text-white">NEW</span>}
+                            {d.drug_name}
+                          </p>
                           <p className="text-[11px] text-ink-soft">{d.application_number}{d.manufacturer ? ` · ${d.manufacturer}` : ""}</p>
                         </Td>
                         <Td className="max-w-[240px] text-ink-muted"><span className="line-clamp-2">{d.active_ingredient || d.generic_name || "—"}</span></Td>
@@ -132,6 +144,37 @@ export function DrugIntelligence() {
       </Card>
       {openId && <DrugDetail id={openId} onClose={() => setOpenId(null)} />}
     </div>
+  );
+}
+
+function isNew(approval?: string | null, days = 90): boolean {
+  if (!approval) return false;
+  return Date.now() - new Date(`${approval}T00:00:00+05:30`).getTime() <= days * 86400000;
+}
+
+function NewMoleculesCard() {
+  const [days, setDays] = React.useState(180);
+  const { data, isLoading } = useQuery({
+    queryKey: ["new-molecules", days],
+    queryFn: () => api.get<NewMolecule[]>("/fda/new-molecules", { days }),
+  });
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  return (
+    <Card className="border-emerald-200">
+      <div className="flex flex-wrap items-center gap-2 border-b border-emerald-100 bg-emerald-50 px-5 py-2.5">
+        <Sparkles className="h-4 w-4 text-emerald-700" />
+        <p className="text-sm font-semibold text-emerald-900">New molecule alerts</p>
+        <span className="text-xs text-emerald-800">First FDA approval of an active ingredient, not approved in India · checked daily</span>
+        <Select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-auto h-8 w-auto text-xs" aria-label="Period">
+          <option value={30}>Last 30 days</option><option value={90}>Last 90 days</option><option value={180}>Last 6 months</option><option value={365}>Last 12 months</option>
+        </Select>
+      </div>
+      {isLoading ? <div className="p-4"><Skeleton className="h-20" /></div> : !data?.length ? (
+        <p className="px-5 py-4 text-sm text-ink-soft">No new molecules in this period.</p>
+      ) : (
+        <div className="max-h-80 overflow-y-auto"><MoleculeList items={data} today={today} /></div>
+      )}
+    </Card>
   );
 }
 

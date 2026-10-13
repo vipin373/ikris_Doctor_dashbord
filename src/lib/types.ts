@@ -258,6 +258,7 @@ export interface CalendarData {
   outreach: { date: string; department: Department; channel: string; campaign: string; status: string; count: number }[];
   feedback: { date: string; department: Department; status: string; count: number }[];
   schedule: { date: string; name: string; department: Department; time: string | null; note: string | null }[];
+  follow_ups?: { date: string; department: Department; count: number }[];
 }
 
 export interface UpcomingDate {
