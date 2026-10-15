@@ -180,7 +180,8 @@ def test_admin_only_endpoints(client):
     app.dependency_overrides[security.get_current_user] = lambda: user("NPP")
     for path in ("/api/users", "/api/google-sheets", "/api/audit-logs", "/api/google-sheets/sync-history"):
         assert client.get(path).status_code == 403
-    assert client.post("/api/google-sheets/sync").status_code == 403
+    # Sync is open to every signed-in user (503 here only because no sync token is configured in tests).
+    assert client.post("/api/google-sheets/sync").status_code != 403
 
 
 def test_unauthenticated_requests_rejected():

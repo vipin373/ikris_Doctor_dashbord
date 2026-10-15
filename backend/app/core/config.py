@@ -22,7 +22,7 @@ class Settings:
     google_private_key: str
     google_project_id: str
     cron_secret: str
-    sync_db_token: str = ""
+    sync_db_token: str
     app_url: str
     allowed_origins: list[str] = field(default_factory=list)
     rate_limit_per_minute: int = 240
