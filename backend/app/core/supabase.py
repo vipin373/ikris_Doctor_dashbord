@@ -38,7 +38,7 @@ def http() -> httpx.AsyncClient:
 
 
 class PostgREST:
-    def __init__(self, token: str | None = None, service: bool = False):
+    def __init__(self, token: str | None = None, service: bool = False, extra_headers: dict[str, str] | None = None):
         s = get_settings()
         if not s.supabase_url or not s.supabase_anon_key:
             raise ServiceUnavailable("Supabase URL / anon key are not configured")
@@ -47,7 +47,7 @@ class PostgREST:
         self.base = f"{s.supabase_url}/rest/v1"
         key = s.supabase_service_role_key if service else s.supabase_anon_key
         bearer = s.supabase_service_role_key if service else (token or s.supabase_anon_key)
-        self.headers = {"apikey": key, "Authorization": f"Bearer {bearer}"}
+        self.headers = {"apikey": key, "Authorization": f"Bearer {bearer}", **(extra_headers or {})}
 
     @classmethod
     def service(cls) -> "PostgREST":

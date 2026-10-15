@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ..core.config import get_settings
-from ..core.security import CurrentUser, require_admin
+from ..core.security import CurrentUser, get_current_user, require_admin
 from ..core.supabase import PostgREST, ServiceUnavailable, SupabaseError
 from ..services.audit import audit
 from ..services import sheet_bridge
 from ..services.google_sheets_service import SheetReadError
-from ..services.sync_service import run_sync
+from ..services.sync_service import _sync_db, run_sync
 
 router = APIRouter(prefix="/api", tags=["google-sheets"])
 
@@ -52,8 +52,24 @@ async def _sync(user: CurrentUser | None, trigger: str, request: Request | None)
 
 
 @router.post("/google-sheets/sync")
-async def sync_now(request: Request, user: CurrentUser = Depends(require_admin)):
-    return await _sync(user, "manual", request)
+async def sync_now(request: Request, user: CurrentUser = Depends(get_current_user)):
+    """Any signed-in user can refresh the Google Sheets (Admin, NPP, Rare Diseases)."""
+    result = await _sync(user, "manual", request)
+    try:  # the separate New Doctors sheet, for users who can see it
+        if "NPP" in user.departments:
+            from ..services import new_doctors_service
+            db = PostgREST.service() if get_settings().has_service_role else user.db()
+            result["new_doctors"] = await new_doctors_service.sync(db)
+    except Exception as exc:
+        result["new_doctors"] = {"error": str(exc)[:200]}
+    return result
+
+
+@router.get("/google-sheets/last-sync")
+async def last_sync(user: CurrentUser = Depends(get_current_user)):
+    rows, _ = await _sync_db(user).select("google_sheet_sync_logs", {
+        "select": "status,started_at,finished_at,new_count,updated_count,error_count", "order": "started_at.desc", "limit": "1"})
+    return rows[0] if rows else None
 
 
 @router.get("/cron/sync")

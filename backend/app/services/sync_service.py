@@ -92,6 +92,11 @@ def _sync_db(user: CurrentUser | None) -> PostgREST:
         return PostgREST.service()
     if user and user.is_admin:
         return user.db()
+    token = get_settings().sync_db_token
+    if user and token:
+        # Any signed-in user may refresh the sheets: the server-only sync token
+        # (checked in the database) grants this one request full sync access.
+        return PostgREST(token=user.token, extra_headers={"x-sync-token": token})
     raise ServiceUnavailable("Scheduled sync needs SUPABASE_SERVICE_ROLE_KEY on the server. Use 'Sync now' instead.")
 
 

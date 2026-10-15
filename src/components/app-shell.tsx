@@ -3,16 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
   Activity, BarChart3, Bell, Briefcase, Cake, CalendarDays, ChevronDown, Dna, FileSpreadsheet, FileText, HeartPulse, LayoutDashboard, LogOut,
-  Menu, MessageSquareHeart, Pill, Search, Shield, Stethoscope, UserPlus, Users, X,
+  Loader2, Menu, MessageSquareHeart, Pill, RefreshCw, Search, Shield, Stethoscope, UserPlus, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { api } from "@/lib/api";
 import type { DoctorRow, Facets, Paged } from "@/lib/types";
-import { cn, DEPARTMENT_LABEL, slugify } from "@/lib/utils";
+import { cn, DEPARTMENT_LABEL, formatDateTime, slugify } from "@/lib/utils";
 import { Badge, departmentTone } from "./ui/badge";
 import { Button } from "./ui/button";
 
@@ -126,6 +127,35 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
     </nav>
+  );
+}
+
+type LastSync = { status: string; started_at: string; finished_at: string | null } | null;
+type SyncSummary = { status: string; new: number; updated: number; errors: number };
+
+/** "Sync Google Sheets", available to every signed-in user. */
+function SheetSyncButton() {
+  const qc = useQueryClient();
+  const last = useQuery({ queryKey: ["last-sync"], queryFn: () => api.get<LastSync>("/google-sheets/last-sync"), staleTime: 60_000 });
+  const sync = useMutation({
+    mutationFn: () => api.post<SyncSummary>("/google-sheets/sync"),
+    onMutate: () => toast.info("Syncing Google Sheets… this can take up to a minute."),
+    onSuccess: (r) => {
+      qc.invalidateQueries();
+      const msg = `${r.new} new, ${r.updated} updated`;
+      if (r.status === "success") toast.success(`Google Sheets synced (${msg})`);
+      else if (r.status === "partial") toast.warning(`Synced with some errors (${msg}, ${r.errors} errors)`);
+      else toast.error("Sync failed. Ask an admin to check Google Sheets.");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Sync failed"),
+  });
+  const when = last.data?.finished_at || last.data?.started_at;
+  return (
+    <Button size="sm" variant="outline" onClick={() => sync.mutate()} disabled={sync.isPending}
+      title={when ? `Last synced ${formatDateTime(when)}` : "Refresh data from Google Sheets"}>
+      {sync.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+      <span className="hidden sm:inline">{sync.isPending ? "Syncing…" : "Sync Google Sheets"}</span>
+    </Button>
   );
 }
 
@@ -305,7 +335,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
           <GlobalSearch />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <SheetSyncButton />
             <UserMenu />
           </div>
         </header>

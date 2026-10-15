@@ -22,6 +22,7 @@ class Settings:
     google_private_key: str
     google_project_id: str
     cron_secret: str
+    sync_db_token: str = ""
     app_url: str
     allowed_origins: list[str] = field(default_factory=list)
     rate_limit_per_minute: int = 240
@@ -70,6 +71,7 @@ def get_settings() -> Settings:
         google_private_key=_env("GOOGLE_PRIVATE_KEY").replace("\\n", "\n"),
         google_project_id=_env("GOOGLE_PROJECT_ID"),
         cron_secret=_env("CRON_SECRET"),
+        sync_db_token=_env("SYNC_DB_TOKEN"),
         app_url=app_url,
         allowed_origins=origins or ["http://localhost:3000"],
         rate_limit_per_minute=int(_env("RATE_LIMIT_PER_MINUTE", default="240")),
