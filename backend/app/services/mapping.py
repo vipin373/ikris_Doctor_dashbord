@@ -24,8 +24,8 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # Normalised doctor field -> header names seen in the Ikris sheets (lower case).
 HEADER_SYNONYMS: dict[str, list[str]] = {
     "s_no": ["s.no", "s.no.", "s no", "sno", "sr no", "sr. no", "serial no"],
-    "bdm": ["bdm"],
-    "nsm": ["nsm"],
+    "bdm": ["bdm", "bdm name", "bdm's name", "bdm names"],
+    "nsm": ["nsm", "nsm name", "manager", "manager name", "national sales manager"],
     "doctor_name": ["doctor name", "doctor's name", "doctors name", "doctor", "name of doctor"],
     "qualification": ["qualification", "degree"],
     "specialty": ["specialty", "speciality", "specialization", "specialisation"],

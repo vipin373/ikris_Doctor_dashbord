@@ -40,3 +40,8 @@ def test_drug_with_ingredient():
     assert drug_with_ingredient({"drug_name": "Jaypirca", "active_ingredient": "PIRTOBRUTINIB"}) == "Jaypirca (Pirtobrutinib)"
     assert drug_with_ingredient({"drug_name": "Pirtobrutinib", "active_ingredient": "pirtobrutinib"}) == "Pirtobrutinib"
     assert drug_with_ingredient({"active_ingredient": "x"}) == "x"
+
+
+def test_rare_sheet_manager_and_bdm_headers():
+    from app.services.mapping import HEADER_SYNONYMS
+    assert "manager" in HEADER_SYNONYMS["nsm"] and "bdm name" in HEADER_SYNONYMS["bdm"]

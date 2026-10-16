@@ -133,7 +133,7 @@ export default function DoctorProfilePage() {
                 <Field label="Sub-department" value={d.sub_department} />
                 <Field label="Category" value={d.category && `Category ${d.category}`} />
                 <Field label="BDM" value={d.bdm} />
-                <Field label="NSM" value={d.nsm} />
+                <Field label="Manager / NSM" value={d.nsm} />
                 <Field label="S.No. in sheet" value={d.s_no} />
                 <Field label="Institute" value={d.institute} />
                 <Field label="Institute address" value={d.institute_address} />

@@ -31,9 +31,9 @@ const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisib
   { key: "department", label: "Department", sortable: true, defaultVisible: true },
   { key: "institute", label: "Institute", sortable: true, defaultVisible: true },
   { key: "city", label: "City", sortable: true, defaultVisible: true },
-  { key: "state", label: "State", sortable: true, defaultVisible: false },
+  { key: "state", label: "State", sortable: true, defaultVisible: true },
   { key: "bdm", label: "BDM", sortable: true, defaultVisible: true },
-  { key: "nsm", label: "NSM", sortable: true, defaultVisible: true },
+  { key: "nsm", label: "Manager / NSM", sortable: true, defaultVisible: true },
   { key: "contact_number", label: "Contact", defaultVisible: false },
   { key: "whatsapp_number", label: "WhatsApp", defaultVisible: true },
   { key: "email", label: "Email", defaultVisible: true },
@@ -49,7 +49,7 @@ type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL: Record<FilterKey, string> = {
   department: "Department", sub_department: "Sub-department", specialty: "Specialty", category: "Category", city: "City",
-  bdm: "BDM", nsm: "NSM", has_email: "Email", has_phone: "Phone", contact: "Communication", data_issue: "Data quality",
+  bdm: "BDM", nsm: "Manager / NSM", has_email: "Email", has_phone: "Phone", contact: "Communication", data_issue: "Data quality",
 };
 
 function loadColumns(): Record<ColumnKey, boolean> {
@@ -144,7 +144,7 @@ export function DoctorDirectory({
 
   const exportSelected = () => {
     const rows = (data?.items ?? []).filter((d) => selected.has(d.id));
-    const cols: ColumnKey[] = ["doctor_name", "specialty", "department", "institute", "city", "bdm", "nsm", "contact_number", "whatsapp_number", "email"];
+    const cols: ColumnKey[] = ["doctor_name", "specialty", "department", "institute", "city", "state", "bdm", "nsm", "contact_number", "whatsapp_number", "email"];
     const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -228,7 +228,7 @@ export function DoctorDirectory({
             options={(facets?.cities ?? []).map((c) => [c, c])} />
           <FilterSelect label="BDM" value={filters.bdm} onChange={(v) => setFilter("bdm", v)}
             options={(facets?.bdms ?? []).map((c) => [c, c])} emptyHint="Not in current sheets" />
-          <FilterSelect label="NSM" value={filters.nsm} onChange={(v) => setFilter("nsm", v)}
+          <FilterSelect label="Manager / NSM" value={filters.nsm} onChange={(v) => setFilter("nsm", v)}
             options={(facets?.nsms ?? []).map((c) => [c, c])} emptyHint="Not in current sheets" />
           <FilterSelect label="Email" value={filters.has_email} onChange={(v) => setFilter("has_email", v)}
             options={[["true", "Email available"], ["false", "No valid email"]]} />
