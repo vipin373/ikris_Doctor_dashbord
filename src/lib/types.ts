@@ -102,6 +102,7 @@ export interface DashboardSummary {
   by_sub_department: { department: Department; name: string; count: number }[];
   by_category: { category: string; count: number }[];
   top_cities: { city: string; count: number }[];
+  top_states?: { state: string; count: number }[];
   with_email: number;
   with_phone: number;
   data_issue_doctors: number;

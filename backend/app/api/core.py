@@ -37,7 +37,12 @@ async def session_event(event: str = Query(..., pattern="^(login|logout)$"), req
 
 @router.get("/dashboard/summary")
 async def dashboard_summary(user: CurrentUser = Depends(get_current_user)):
-    data = await user.db().rpc("dashboard_summary")
+    db = user.db()
+    data = await db.rpc("dashboard_summary")
+    try:
+        data.update(await db.rpc("dashboard_summary_locations"))
+    except SupabaseError:
+        data["top_states"] = []
     data["role"] = user.role
     return data
 

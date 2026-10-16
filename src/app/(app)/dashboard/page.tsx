@@ -155,20 +155,7 @@ export default function DashboardPage() {
                 )}
               </CardBody>
             </Card>
-            <Card>
-              <CardHeader title="Top cities" />
-              <CardBody className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.top_cities} margin={{ left: 0, right: 8 }}>
-                    <CartesianGrid vertical={false} stroke="#EEF2F7" />
-                    <XAxis dataKey="city" tick={{ fontSize: 11, fill: "#334155" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#64748B" }} />
-                    <Tooltip cursor={{ fill: "#F1F5F9" }} />
-                    <Bar dataKey="count" name="Doctors" fill="#4C6FB5" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardBody>
-            </Card>
+            <LocationChart cities={data.top_cities} states={data.top_states ?? []} />
             <Card>
               <CardHeader title={categoriesSet ? "Category A / B / C" : "Patient feedback status"}
                 description={categoriesSet ? undefined : "Category A/B/C appears once the master sheets with a Category column are connected"} />
@@ -200,5 +187,44 @@ export default function DashboardPage() {
         </>
       )}
     </div>
+  );
+}
+
+
+/** Top cities, or top states (the Rare Diseases sheet has State but no City). */
+function LocationChart({ cities, states }: { cities: { city: string; count: number }[]; states: { state: string; count: number }[] }) {
+  const [view, setView] = React.useState<"city" | "state" | null>(null);
+  const mode = view ?? (cities.length ? "city" : "state");
+  const rows = mode === "city" ? cities.map((c) => ({ name: c.city, count: c.count })) : states.map((s) => ({ name: s.state, count: s.count }));
+  const tabs = (
+    <div className="flex rounded-md border border-line p-0.5 text-xs">
+      {(["city", "state"] as const).map((m) => (
+        <button key={m} onClick={() => setView(m)}
+          className={mode === m ? "rounded bg-brand-50 px-2 py-0.5 font-medium text-brand-800" : "px-2 py-0.5 text-ink-soft hover:text-ink"}>
+          {m === "city" ? "Cities" : "States"}
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <Card>
+      <CardHeader title={mode === "city" ? "Top cities" : "Top states"} action={tabs} />
+      <CardBody className="h-64">
+        {rows.length ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <CartesianGrid horizontal={false} stroke="#EEF2F7" />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#64748B" }} />
+              <YAxis type="category" dataKey="name" width={110} interval={0} tick={{ fontSize: 11, fill: "#334155" }} />
+              <Tooltip cursor={{ fill: "#F1F5F9" }} />
+              <Bar dataKey="count" name="Doctors" fill="#4C6FB5" radius={[0, 3, 3, 0]} maxBarSize={18} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyState title={mode === "city" ? "No cities in the sheets" : "No states in the sheets"}
+            description={`Add a ${mode === "city" ? "City" : "State"} column to the Google Sheet and sync to see this chart.`} />
+        )}
+      </CardBody>
+    </Card>
   );
 }
