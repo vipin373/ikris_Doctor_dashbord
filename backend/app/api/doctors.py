@@ -21,11 +21,11 @@ router = APIRouter(prefix="/api/doctors", tags=["doctors"])
 LIST_COLUMNS = (
     "id,s_no,doctor_name,qualification,specialty,category,department,sub_department,institute,city,state,"
     "bdm,nsm,contact_number,whatsapp_number,email,date_of_birth,date_of_anniversary,last_contact_at,last_contact_status,"
-    "last_contact_channel,emails_sent,whatsapp_sent,data_issues"
+    "last_contact_channel,emails_sent,whatsapp_sent,last_whatsapp_status,last_whatsapp_at,data_issues"
 )
 SORTABLE = {
     "doctor_name", "specialty", "category", "institute", "city", "state", "bdm", "nsm", "department",
-    "sub_department", "last_contact_at", "emails_sent", "created_at",
+    "sub_department", "last_contact_at", "last_whatsapp_at", "emails_sent", "created_at",
 }
 
 # "oncologist" should find "Oncology" / "ONC", "geneticist" -> "Genetics", etc.
@@ -168,10 +168,11 @@ async def export_doctors(
         ("S.No", "s_no"), ("Doctor Name", "doctor_name"), ("Qualification", "qualification"),
         ("Department", "department"), ("Sub-Department", "sub_department"), ("Specialty", "specialty"),
         ("Category", "category"), ("Institute", "institute"), ("Institute Address", "institute_address"),
-        ("City", "city"), ("State", "state"), ("Country", "country"), ("BDM", "bdm"), ("NSM", "nsm"),
+        ("City", "city"), ("State", "state"), ("Country", "country"), ("BDM", "bdm"), ("Manager / NSM", "nsm"),
         ("Contact Number", "contact_number"), ("WhatsApp", "whatsapp_number"), ("Email", "email"),
         ("Date of Birth", "date_of_birth"), ("Date of Anniversary", "date_of_anniversary"),
         ("Emails Sent", "emails_sent"), ("Last Contact", "last_contact_at"), ("Last Status", "last_contact_status"),
+        ("WhatsApp Send Status", "last_whatsapp_status"), ("WhatsApp Send Date", "last_whatsapp_at"),
         ("Data Issues", "data_issues"),
     ]
     buf = io.StringIO()

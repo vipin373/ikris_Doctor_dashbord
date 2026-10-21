@@ -51,6 +51,10 @@ DEFAULT_SOURCES = [
                             "status_column": "20th Mail Status", "date_column": "20th Mail Date",
                             "error_column": "Error", "skipped_pattern": "no active campaign",
                         },
+                        {
+                            "channel": "WHATSAPP", "event_type": "WhatsApp", "campaign": "NPP WhatsApp",
+                            "status_column": "whatsapp send status", "date_column": "whatsapp send date",
+                        },
                     ],
                 },
             },

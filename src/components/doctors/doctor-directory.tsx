@@ -20,7 +20,7 @@ import { cn, DEPARTMENT_LABEL, formatDate, formatDayMonth, ISSUE_LABEL, whatsapp
 
 type ColumnKey =
   | "s_no" | "doctor_name" | "qualification" | "specialty" | "category" | "department" | "institute" | "city"
-  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at";
+  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at";
 
 const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisible: boolean }[] = [
   { key: "s_no", label: "S.No.", defaultVisible: false },
@@ -40,6 +40,7 @@ const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisib
   { key: "date_of_birth", label: "Birthday", defaultVisible: false },
   { key: "date_of_anniversary", label: "Anniversary", defaultVisible: false },
   { key: "last_contact_at", label: "Last Contact", sortable: true, defaultVisible: true },
+  { key: "last_whatsapp_at", label: "WhatsApp Sent", sortable: true, defaultVisible: true },
 ];
 
 const FILTER_KEYS = [
@@ -426,6 +427,15 @@ function Cell({ doctor: d, column }: { doctor: DoctorRow; column: ColumnKey }) {
     case "date_of_birth":
     case "date_of_anniversary":
       return <>{formatDayMonth(d[column])}</>;
+    case "last_whatsapp_at":
+      return d.last_whatsapp_status ? (
+        <div className="leading-tight">
+          <Badge tone={statusTone(d.last_whatsapp_status)}>{d.last_whatsapp_status}</Badge>
+          <p className="mt-0.5 text-[11px] text-ink-soft">{d.last_whatsapp_at ? formatDate(d.last_whatsapp_at) : "Date not recorded"}</p>
+        </div>
+      ) : (
+        <span className="text-ink-soft">Not sent</span>
+      );
     case "last_contact_at":
       return d.last_contact_status ? (
         <div className="leading-tight">

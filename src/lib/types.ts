@@ -31,6 +31,8 @@ export interface DoctorRow {
   last_contact_at: string | null;
   last_contact_status: string | null;
   last_contact_channel: string | null;
+  last_whatsapp_status?: string | null;
+  last_whatsapp_at?: string | null;
   emails_sent: number;
   whatsapp_sent: number;
   data_issues: string[];
