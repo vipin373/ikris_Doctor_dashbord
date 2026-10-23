@@ -4,9 +4,10 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Inbox, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCountUp, useTilt } from "@/lib/motion";
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded bg-slate-100", className)} />;
+  return <div className={cn("animate-pulse rounded-xl bg-gradient-to-r from-cream/70 via-slate-100 to-cream/70", className)} />;
 }
 
 export function EmptyState({
@@ -22,8 +23,8 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="mb-3 rounded-full bg-slate-100 p-3">
-        <Icon className="h-5 w-5 text-ink-soft" />
+      <div className="mb-3 rounded-2xl bg-gradient-to-b from-cream to-slate-100 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+        <Icon className="h-5 w-5 text-walnut-500" />
       </div>
       <p className="text-sm font-medium text-ink">{title}</p>
       {description && <p className="mt-1 max-w-sm text-xs text-ink-soft">{description}</p>}
@@ -35,7 +36,7 @@ export function EmptyState({
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const message = error instanceof Error ? error.message : "Something went wrong.";
   return (
-    <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
       <span className="font-medium">Could not load data.</span> {message}
       {onRetry && (
         <button className="ml-2 font-medium underline" onClick={onRetry}>
@@ -61,7 +62,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
         {breadcrumb && <div className="mb-1 text-xs text-ink-soft">{breadcrumb}</div>}
-        <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
+        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-ink">{title}</h1>
         {description && <p className="mt-1 text-sm text-ink-soft">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -82,28 +83,41 @@ export function StatCard({
   icon?: React.ComponentType<{ className?: string }>;
   tone?: "brand" | "green" | "amber" | "red" | "violet" | "sky";
 }) {
+  const ref = useTilt<HTMLDivElement>(4);
   const toneClass = {
-    brand: "bg-brand-50 text-brand-700",
-    green: "bg-emerald-50 text-emerald-700",
-    amber: "bg-amber-50 text-amber-700",
-    red: "bg-red-50 text-red-700",
-    violet: "bg-violet-50 text-violet-700",
-    sky: "bg-sky-50 text-sky-700",
+    brand: "from-sage-100 to-sage-50 text-sage-700 ring-sage-200",
+    green: "from-sage-100 to-sage-50 text-sage-700 ring-sage-200",
+    amber: "from-glow-100 to-glow-50 text-glow-700 ring-glow-200",
+    red: "from-red-100 to-red-50 text-red-700 ring-red-200",
+    violet: "from-walnut-100 to-walnut-50 text-walnut-700 ring-walnut-200",
+    sky: "from-sage-100 to-cream text-sage-800 ring-sage-200",
   }[tone];
   return (
-    <div className="rounded-lg border border-line bg-white p-4 shadow-card">
-      <div className="flex items-start justify-between">
+    <div ref={ref} className="surface-3d group relative h-full overflow-hidden rounded-card border border-line/80 bg-white p-4 shadow-card">
+      <span className="sheen" aria-hidden />
+      <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-24 w-24 rounded-full bg-sage-100/60 blur-2xl transition-opacity duration-350 group-hover:opacity-100 md:opacity-60" />
+      <div className="relative flex items-start justify-between gap-2">
         <p className="text-xs font-medium text-ink-soft">{label}</p>
         {Icon && (
-          <span className={cn("rounded-md p-1.5", toneClass)}>
-            <Icon className="h-3.5 w-3.5" />
+          <span className={cn("rounded-xl bg-gradient-to-b p-2 ring-1 ring-inset transition-transform duration-350 ease-spring group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]", toneClass)}>
+            <Icon className="h-4 w-4" />
           </span>
         )}
       </div>
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-ink">{value}</p>
-      {hint && <p className="mt-1 text-xs text-ink-soft">{hint}</p>}
+      <p className="relative mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] text-ink tabular-nums [transform:translateZ(18px)]">
+        <CountUp value={value} />
+      </p>
+      {hint && <p className="relative mt-2 text-xs leading-snug text-ink-soft">{hint}</p>}
     </div>
   );
+}
+
+/** Animates plain whole numbers like "1,234"; anything else renders as given. */
+function CountUp({ value }: { value: React.ReactNode }) {
+  const numeric = typeof value === "string" && /^\d{1,3}(,\d{2,3})*$|^\d+$/.test(value) ? Number(value.replace(/,/g, "")) : null;
+  const n = useCountUp(numeric);
+  if (numeric === null) return <>{value}</>;
+  return <>{(n ?? numeric).toLocaleString("en-IN")}</>;
 }
 
 export function Dialog({
@@ -126,10 +140,10 @@ export function Dialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-900/40" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 animate-fade-in bg-walnut-950/40 backdrop-blur-[2px]" />
         <DialogPrimitive.Content
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-line bg-white shadow-xl focus:outline-none",
+            "fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-line bg-white shadow-pop focus:outline-none data-[state=open]:animate-[dialog-in_220ms_cubic-bezier(0.34,1.56,0.64,1)]",
             wide ? "max-w-2xl" : "max-w-md",
           )}
         >
@@ -140,7 +154,7 @@ export function Dialog({
                 <DialogPrimitive.Description className="mt-1 text-xs text-ink-soft">{description}</DialogPrimitive.Description>
               )}
             </div>
-            <DialogPrimitive.Close className="rounded p-1 text-ink-soft hover:bg-slate-100" aria-label="Close">
+            <DialogPrimitive.Close className="rounded-lg p-1 text-ink-soft transition-colors hover:bg-cream hover:text-ink" aria-label="Close">
               <X className="h-4 w-4" />
             </DialogPrimitive.Close>
           </div>
@@ -156,7 +170,7 @@ export function Tooltip({ label, children }: { label: string; children: React.Re
   return (
     <span className="group relative inline-flex">
       {children}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-walnut-900 px-2 py-1 text-[11px] text-walnut-50 opacity-0 shadow-pop transition-[opacity,transform] duration-150 group-hover:-translate-y-0.5 group-hover:opacity-100">
         {label}
       </span>
     </span>
@@ -184,7 +198,7 @@ export function Pagination({
       </span>
       <div className="flex items-center gap-1">
         <button
-          className="rounded border border-line px-2.5 py-1 hover:bg-slate-50 disabled:opacity-40"
+          className="rounded-lg border border-line bg-white px-2.5 py-1 transition-colors hover:border-sage-300 hover:bg-sage-50 disabled:opacity-40"
           disabled={page <= 1}
           onClick={() => onPage(page - 1)}
         >
@@ -194,7 +208,7 @@ export function Pagination({
           Page {page} of {pages}
         </span>
         <button
-          className="rounded border border-line px-2.5 py-1 hover:bg-slate-50 disabled:opacity-40"
+          className="rounded-lg border border-line bg-white px-2.5 py-1 transition-colors hover:border-sage-300 hover:bg-sage-50 disabled:opacity-40"
           disabled={page >= pages}
           onClick={() => onPage(page + 1)}
         >
@@ -231,10 +245,10 @@ export function Switch({ checked, onChange, disabled }: { checked: boolean; onCh
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50",
-        checked ? "bg-brand-700" : "bg-slate-300",
+        checked ? "bg-sage-500 shadow-[inset_0_1px_2px_rgba(0,0,0,0.15)]" : "bg-slate-300",
       )}
     >
-      <span className={cn("inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", checked ? "translate-x-4" : "translate-x-0.5")} />
+      <span className={cn("inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-250 ease-spring", checked ? "translate-x-4" : "translate-x-0.5")} />
     </button>
   );
 }
