@@ -22,11 +22,12 @@ LIST_COLUMNS = (
     "id,s_no,doctor_name,qualification,specialty,category,department,sub_department,institute,city,state,"
     "bdm,nsm,contact_number,whatsapp_number,email,date_of_birth,date_of_anniversary,last_contact_at,last_contact_status,"
     "last_contact_channel,emails_sent,whatsapp_sent,last_whatsapp_status,last_whatsapp_at,"
-    "last_reply_at,last_reply_status,last_reply_channel,last_reply_text,replies_count,data_issues"
+    "last_reply_at,last_reply_status,last_reply_channel,last_reply_text,replies_count,"
+    "email_reply_status,email_reply_at,email_reply_text,whatsapp_reply_status,whatsapp_reply_at,whatsapp_reply_text,data_issues"
 )
 SORTABLE = {
     "doctor_name", "specialty", "category", "institute", "city", "state", "bdm", "nsm", "department",
-    "sub_department", "last_contact_at", "last_whatsapp_at", "last_reply_at", "emails_sent", "created_at",
+    "sub_department", "last_contact_at", "last_whatsapp_at", "last_reply_at", "email_reply_at", "whatsapp_reply_at", "emails_sent", "created_at",
 }
 
 # "oncologist" should find "Oncology" / "ONC", "geneticist" -> "Genetics", etc.
@@ -118,6 +119,10 @@ def build_filters(
         f.append(("last_reply_status", "not.is.null"))
     elif reply == "none":
         f.append(("last_reply_status", "is.null"))
+    elif reply == "email":
+        f.append(("email_reply_status", "eq.Replied"))
+    elif reply == "whatsapp":
+        f.append(("whatsapp_reply_status", "eq.Replied"))
     if data_issue == "any":
         f.append(("data_issues", "neq.[]"))
     elif data_issue:
@@ -138,7 +143,7 @@ def _filter_params(
     has_phone: bool | None = None,
     contact: str | None = None,
     data_issue: str | None = None,
-    reply: str | None = Query(None, pattern="^(replied|auto|any|none)$"),
+    reply: str | None = Query(None, pattern="^(replied|auto|any|none|email|whatsapp)$"),
 ) -> dict[str, Any]:
     return locals()
 
@@ -184,7 +189,8 @@ async def export_doctors(
         ("Date of Birth", "date_of_birth"), ("Date of Anniversary", "date_of_anniversary"),
         ("Emails Sent", "emails_sent"), ("Last Contact", "last_contact_at"), ("Last Status", "last_contact_status"),
         ("WhatsApp Send Status", "last_whatsapp_status"), ("WhatsApp Send Date", "last_whatsapp_at"),
-        ("Reply Type", "last_reply_status"), ("Reply Channel", "last_reply_channel"), ("Reply Date", "last_reply_at"), ("Reply", "last_reply_text"),
+        ("Email Reply Type", "email_reply_status"), ("Email Reply Date", "email_reply_at"), ("Email Reply", "email_reply_text"),
+        ("WhatsApp Reply Type", "whatsapp_reply_status"), ("WhatsApp Reply Date", "whatsapp_reply_at"), ("WhatsApp Reply", "whatsapp_reply_text"),
         ("Data Issues", "data_issues"),
     ]
     buf = io.StringIO()

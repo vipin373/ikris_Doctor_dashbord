@@ -38,6 +38,12 @@ export interface DoctorRow {
   last_reply_channel?: string | null;
   last_reply_text?: string | null;
   replies_count?: number;
+  email_reply_status?: string | null;
+  email_reply_at?: string | null;
+  email_reply_text?: string | null;
+  whatsapp_reply_status?: string | null;
+  whatsapp_reply_at?: string | null;
+  whatsapp_reply_text?: string | null;
   emails_sent: number;
   whatsapp_sent: number;
   data_issues: string[];
@@ -119,6 +125,12 @@ export interface DashboardSummary {
   replies: number;
   auto_replies?: number;
   replied_doctors?: number;
+  email_replies?: number;
+  email_auto_replies?: number;
+  email_replied_doctors?: number;
+  whatsapp_replies?: number;
+  whatsapp_auto_replies?: number;
+  whatsapp_replied_doctors?: number;
   contacted_doctors: number;
   outreach_by_campaign: { campaign: string; status: string; count: number }[];
   feedback_total: number;

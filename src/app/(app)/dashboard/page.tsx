@@ -167,7 +167,8 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
-          <div className="stagger grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className={cn("stagger grid grid-cols-2 gap-4",
+            me?.departments.includes("NPP") && me?.departments.includes("RARE_DISEASES") ? "lg:grid-cols-3" : "lg:grid-cols-4")}>
             <StatCard label="Total doctors" value={number(data.total_doctors)} icon={Users}
               hint={`${number(data.with_email)} with valid email · ${number(data.with_phone)} with phone`} />
             {me?.departments.includes("NPP") && (
@@ -181,9 +182,13 @@ export default function DashboardPage() {
             <StatCard label="Emails sent" value={number(data.emails_sent)} icon={Send} tone="green"
               hint={`${number(data.contacted_doctors)} doctors contacted · ${number(data.emails_failed)} failed`} />
             <StatCard label="WhatsApp messages" value={number(data.whatsapp_sent)} icon={MessageCircle} tone="amber" hint="From the sheets and the FDA module" />
-            <Link href="/doctors?reply=any" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
-              <StatCard label="Replies received" value={number(data.replies)} icon={Mail} tone="green"
-                hint={<>{number(data.replied_doctors ?? 0)} doctors replied · {number(data.auto_replies ?? 0)} auto-replies →</>} />
+            <Link href="/doctors?reply=email" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
+              <StatCard label="Email replies" value={number(data.email_replies ?? 0)} icon={Mail} tone="green"
+                hint={<>{number(data.email_replied_doctors ?? 0)} doctors replied · {number(data.email_auto_replies ?? 0)} auto-replies →</>} />
+            </Link>
+            <Link href="/doctors?reply=whatsapp" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
+              <StatCard label="WhatsApp replies" value={number(data.whatsapp_replies ?? 0)} icon={MessageCircle} tone="amber"
+                hint={<>{number(data.whatsapp_replied_doctors ?? 0)} doctors replied · {number(data.whatsapp_auto_replies ?? 0)} auto-replies →</>} />
             </Link>
             <StatCard label="Patient feedback requests" value={number(data.feedback_total)} icon={MessageSquareHeart} tone="sky"
               hint={feedback.map((f) => `${f.name} ${f.value}`).join(" · ")} />

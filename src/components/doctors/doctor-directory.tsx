@@ -20,7 +20,7 @@ import { cn, DEPARTMENT_LABEL, formatDate, formatDayMonth, ISSUE_LABEL, whatsapp
 
 type ColumnKey =
   | "s_no" | "doctor_name" | "qualification" | "specialty" | "category" | "department" | "institute" | "city"
-  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at" | "last_reply_at";
+  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at" | "email_reply_at" | "whatsapp_reply_at";
 
 const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisible: boolean }[] = [
   { key: "s_no", label: "S.No.", defaultVisible: false },
@@ -41,7 +41,8 @@ const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisib
   { key: "date_of_anniversary", label: "Anniversary", defaultVisible: false },
   { key: "last_contact_at", label: "Last Contact", sortable: true, defaultVisible: true },
   { key: "last_whatsapp_at", label: "WhatsApp Sent", sortable: true, defaultVisible: true },
-  { key: "last_reply_at", label: "Reply", sortable: true, defaultVisible: true },
+  { key: "email_reply_at", label: "Email Reply", sortable: true, defaultVisible: true },
+  { key: "whatsapp_reply_at", label: "WhatsApp Reply", sortable: true, defaultVisible: true },
 ];
 
 const FILTER_KEYS = [
@@ -239,7 +240,7 @@ export function DoctorDirectory({
           <FilterSelect label="Communication" value={filters.contact} onChange={(v) => setFilter("contact", v)}
             options={[["contacted", "Email sent"], ["not_contacted", "Not contacted"], ...(facets?.contact_statuses ?? []).map((s) => [s, `Last status: ${s}`] as [string, string])]} />
           <FilterSelect label="Reply" value={filters.reply} onChange={(v) => setFilter("reply", v)}
-            options={[["replied", "Replied"], ["auto", "Auto-reply only"], ["any", "Any reply"], ["none", "No reply yet"]]} />
+            options={[["email", "Replied by email"], ["whatsapp", "Replied on WhatsApp"], ["replied", "Replied (any channel)"], ["auto", "Auto-reply only"], ["any", "Any reply"], ["none", "No reply yet"]]} />
           <FilterSelect label="Data quality" value={filters.data_issue} onChange={(v) => setFilter("data_issue", v)}
             options={[["any", "Any issue"], ...Object.entries(ISSUE_LABEL).slice(0, 5)]} />
         </div>
@@ -430,22 +431,10 @@ function Cell({ doctor: d, column }: { doctor: DoctorRow; column: ColumnKey }) {
     case "date_of_birth":
     case "date_of_anniversary":
       return <>{formatDayMonth(d[column])}</>;
-    case "last_reply_at":
-      return d.last_reply_status ? (
-        <Tooltip label={(d.last_reply_text || "No text recorded").slice(0, 220)}>
-          <div className="max-w-[220px] leading-tight">
-            <div className="flex items-center gap-1.5">
-              <Badge tone={d.last_reply_status === "Replied" ? "green" : "neutral"}>{d.last_reply_status}</Badge>
-              <span className="text-[11px] text-ink-soft">{d.last_reply_channel === "WHATSAPP" ? "WhatsApp" : "Email"}</span>
-            </div>
-            <p className="mt-0.5 truncate text-[11px] text-ink-muted">
-              {d.last_reply_at ? formatDate(d.last_reply_at) + " · " : ""}{d.last_reply_text || ""}
-            </p>
-          </div>
-        </Tooltip>
-      ) : (
-        <span className="text-ink-soft">—</span>
-      );
+    case "email_reply_at":
+      return <ReplyCell status={d.email_reply_status} at={d.email_reply_at} text={d.email_reply_text} />;
+    case "whatsapp_reply_at":
+      return <ReplyCell status={d.whatsapp_reply_status} at={d.whatsapp_reply_at} text={d.whatsapp_reply_text} />;
     case "last_whatsapp_at":
       return d.last_whatsapp_status ? (
         <div className="leading-tight">
@@ -496,5 +485,18 @@ function RowActions({ doctor: d, onView }: { doctor: DoctorRow; onView: () => vo
         </a>
       </Tooltip>
     </div>
+  );
+}
+
+
+function ReplyCell({ status, at, text }: { status?: string | null; at?: string | null; text?: string | null }) {
+  if (!status) return <span className="text-ink-soft">—</span>;
+  return (
+    <Tooltip label={(text || "No text recorded").slice(0, 220)}>
+      <div className="max-w-[200px] leading-tight">
+        <Badge tone={status === "Replied" ? "green" : "neutral"}>{status}</Badge>
+        <p className="mt-0.5 truncate text-[11px] text-ink-muted">{at ? formatDate(at) + " · " : ""}{text || ""}</p>
+      </div>
+    </Tooltip>
   );
 }
