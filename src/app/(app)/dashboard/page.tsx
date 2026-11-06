@@ -181,7 +181,10 @@ export default function DashboardPage() {
             <StatCard label="Emails sent" value={number(data.emails_sent)} icon={Send} tone="green"
               hint={`${number(data.contacted_doctors)} doctors contacted · ${number(data.emails_failed)} failed`} />
             <StatCard label="WhatsApp messages" value={number(data.whatsapp_sent)} icon={MessageCircle} tone="amber" hint="From the sheets and the FDA module" />
-            <StatCard label="Replies received" value={number(data.replies)} icon={Mail} hint="Reply tracking starts in phase 2" />
+            <Link href="/doctors?reply=any" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
+              <StatCard label="Replies received" value={number(data.replies)} icon={Mail} tone="green"
+                hint={<>{number(data.replied_doctors ?? 0)} doctors replied · {number(data.auto_replies ?? 0)} auto-replies →</>} />
+            </Link>
             <StatCard label="Patient feedback requests" value={number(data.feedback_total)} icon={MessageSquareHeart} tone="sky"
               hint={feedback.map((f) => `${f.name} ${f.value}`).join(" · ")} />
             <Link href="/calendar" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">

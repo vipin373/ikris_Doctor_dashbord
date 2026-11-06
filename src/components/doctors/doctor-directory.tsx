@@ -20,7 +20,7 @@ import { cn, DEPARTMENT_LABEL, formatDate, formatDayMonth, ISSUE_LABEL, whatsapp
 
 type ColumnKey =
   | "s_no" | "doctor_name" | "qualification" | "specialty" | "category" | "department" | "institute" | "city"
-  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at";
+  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at" | "last_reply_at";
 
 const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisible: boolean }[] = [
   { key: "s_no", label: "S.No.", defaultVisible: false },
@@ -41,16 +41,17 @@ const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisib
   { key: "date_of_anniversary", label: "Anniversary", defaultVisible: false },
   { key: "last_contact_at", label: "Last Contact", sortable: true, defaultVisible: true },
   { key: "last_whatsapp_at", label: "WhatsApp Sent", sortable: true, defaultVisible: true },
+  { key: "last_reply_at", label: "Reply", sortable: true, defaultVisible: true },
 ];
 
 const FILTER_KEYS = [
-  "department", "sub_department", "specialty", "category", "city", "bdm", "nsm", "has_email", "has_phone", "contact", "data_issue",
+  "department", "sub_department", "specialty", "category", "city", "bdm", "nsm", "has_email", "has_phone", "contact", "reply", "data_issue",
 ] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL: Record<FilterKey, string> = {
   department: "Department", sub_department: "Sub-department", specialty: "Specialty", category: "Category", city: "City",
-  bdm: "BDM", nsm: "Manager / NSM", has_email: "Email", has_phone: "Phone", contact: "Communication", data_issue: "Data quality",
+  bdm: "BDM", nsm: "Manager / NSM", has_email: "Email", has_phone: "Phone", contact: "Communication", reply: "Reply", data_issue: "Data quality",
 };
 
 function loadColumns(): Record<ColumnKey, boolean> {
@@ -237,6 +238,8 @@ export function DoctorDirectory({
             options={[["true", "Phone available"], ["false", "No valid phone"]]} />
           <FilterSelect label="Communication" value={filters.contact} onChange={(v) => setFilter("contact", v)}
             options={[["contacted", "Email sent"], ["not_contacted", "Not contacted"], ...(facets?.contact_statuses ?? []).map((s) => [s, `Last status: ${s}`] as [string, string])]} />
+          <FilterSelect label="Reply" value={filters.reply} onChange={(v) => setFilter("reply", v)}
+            options={[["replied", "Replied"], ["auto", "Auto-reply only"], ["any", "Any reply"], ["none", "No reply yet"]]} />
           <FilterSelect label="Data quality" value={filters.data_issue} onChange={(v) => setFilter("data_issue", v)}
             options={[["any", "Any issue"], ...Object.entries(ISSUE_LABEL).slice(0, 5)]} />
         </div>
@@ -427,6 +430,22 @@ function Cell({ doctor: d, column }: { doctor: DoctorRow; column: ColumnKey }) {
     case "date_of_birth":
     case "date_of_anniversary":
       return <>{formatDayMonth(d[column])}</>;
+    case "last_reply_at":
+      return d.last_reply_status ? (
+        <Tooltip label={(d.last_reply_text || "No text recorded").slice(0, 220)}>
+          <div className="max-w-[220px] leading-tight">
+            <div className="flex items-center gap-1.5">
+              <Badge tone={d.last_reply_status === "Replied" ? "green" : "neutral"}>{d.last_reply_status}</Badge>
+              <span className="text-[11px] text-ink-soft">{d.last_reply_channel === "WHATSAPP" ? "WhatsApp" : "Email"}</span>
+            </div>
+            <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+              {d.last_reply_at ? formatDate(d.last_reply_at) + " · " : ""}{d.last_reply_text || ""}
+            </p>
+          </div>
+        </Tooltip>
+      ) : (
+        <span className="text-ink-soft">—</span>
+      );
     case "last_whatsapp_at":
       return d.last_whatsapp_status ? (
         <div className="leading-tight">

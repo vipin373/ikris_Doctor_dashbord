@@ -45,3 +45,30 @@ def test_drug_with_ingredient():
 def test_rare_sheet_manager_and_bdm_headers():
     from app.services.mapping import HEADER_SYNONYMS
     assert "manager" in HEADER_SYNONYMS["nsm"] and "bdm name" in HEADER_SYNONYMS["bdm"]
+
+
+def test_parse_reply_formats():
+    from app.services.mapping import parse_reply
+    fm = ["%d/%m/%Y %H:%M:%S", "%d/%m/%Y"]
+    st, d, t = parse_reply("REPLIED 04/09/2026: Dear IKRIS TEAM, We are hosting...", fm)
+    assert st == "Replied" and d.day == 4 and d.month == 9 and t.startswith("Dear IKRIS")
+    st, d, t = parse_reply("AUTO-REPLY 19/08/2026: I'm on annual leave until 20 August.", fm)
+    assert st == "Auto-reply" and d.month == 8 and t.startswith("I'm on annual leave")
+    st, d, t = parse_reply("Interested, please call me", fm)
+    assert st == "Replied" and d is None and t == "Interested, please call me"
+    assert parse_reply("  ", fm) is None
+
+
+def test_reply_column_becomes_inbound_event():
+    from app.services.mapping import TabContext, map_doctor_tab
+    ctx = TabContext(spreadsheet_id="s", sheet_name="Doctors", department="NPP", header_row=1, sub_department=None, specialty=None,
+                     mapping={"date_formats": ["%d/%m/%Y"], "events": [
+                         {"reply_column": "Email Reply", "channel": "EMAIL", "event_type": "Email reply"}]})
+    res = map_doctor_tab(ctx, [["Doctor Name", "Email", "Email Reply"],
+                               ["Dr A", "a@x.com", "REPLIED 04/09/2026: Yes please send details"],
+                               ["Dr B", "b@x.com", ""]])
+    ev = res.doctors[0].events
+    assert len(ev) == 1 and ev[0]["direction"] == "INBOUND" and ev[0]["status"] == "Replied"
+    assert ev[0]["detail"] == "Yes please send details" and ev[0]["occurred_at"].startswith("2026-09-04")
+    assert res.doctors[1].events == []
+    assert "Email Reply" not in res.doctors[0].fields.get("extra", {})

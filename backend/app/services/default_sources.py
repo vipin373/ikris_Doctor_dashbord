@@ -55,6 +55,8 @@ DEFAULT_SOURCES = [
                             "channel": "WHATSAPP", "event_type": "WhatsApp", "campaign": "NPP WhatsApp",
                             "status_column": "whatsapp send status", "date_column": "whatsapp send date",
                         },
+                        {"reply_column": "Email Reply", "channel": "EMAIL", "event_type": "Email reply", "campaign": "NPP Email reply"},
+                        {"reply_column": "WhatsApp Reply", "channel": "WHATSAPP", "event_type": "WhatsApp reply", "campaign": "NPP WhatsApp reply"},
                     ],
                 },
             },

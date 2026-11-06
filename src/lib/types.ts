@@ -33,6 +33,11 @@ export interface DoctorRow {
   last_contact_channel: string | null;
   last_whatsapp_status?: string | null;
   last_whatsapp_at?: string | null;
+  last_reply_at?: string | null;
+  last_reply_status?: string | null;
+  last_reply_channel?: string | null;
+  last_reply_text?: string | null;
+  replies_count?: number;
   emails_sent: number;
   whatsapp_sent: number;
   data_issues: string[];
@@ -112,6 +117,8 @@ export interface DashboardSummary {
   emails_failed: number;
   whatsapp_sent: number;
   replies: number;
+  auto_replies?: number;
+  replied_doctors?: number;
   contacted_doctors: number;
   outreach_by_campaign: { campaign: string; status: string; count: number }[];
   feedback_total: number;

@@ -21,11 +21,12 @@ router = APIRouter(prefix="/api/doctors", tags=["doctors"])
 LIST_COLUMNS = (
     "id,s_no,doctor_name,qualification,specialty,category,department,sub_department,institute,city,state,"
     "bdm,nsm,contact_number,whatsapp_number,email,date_of_birth,date_of_anniversary,last_contact_at,last_contact_status,"
-    "last_contact_channel,emails_sent,whatsapp_sent,last_whatsapp_status,last_whatsapp_at,data_issues"
+    "last_contact_channel,emails_sent,whatsapp_sent,last_whatsapp_status,last_whatsapp_at,"
+    "last_reply_at,last_reply_status,last_reply_channel,last_reply_text,replies_count,data_issues"
 )
 SORTABLE = {
     "doctor_name", "specialty", "category", "institute", "city", "state", "bdm", "nsm", "department",
-    "sub_department", "last_contact_at", "last_whatsapp_at", "emails_sent", "created_at",
+    "sub_department", "last_contact_at", "last_whatsapp_at", "last_reply_at", "emails_sent", "created_at",
 }
 
 # "oncologist" should find "Oncology" / "ONC", "geneticist" -> "Genetics", etc.
@@ -80,6 +81,7 @@ def build_filters(
     has_phone: bool | None,
     contact: str | None,
     data_issue: str | None,
+    reply: str | None = None,
 ) -> list[tuple[str, str]]:
     departments = user.ensure_department(department)
     f: list[tuple[str, str]] = [("department", f"in.({','.join(departments)})")]
@@ -108,6 +110,14 @@ def build_filters(
         f.append(("emails_sent", "eq.0"))
     elif contact:
         f.append(("last_contact_status", f"eq.{contact}"))
+    if reply == "replied":
+        f.append(("replies_count", "gt.0"))
+    elif reply == "auto":
+        f.append(("last_reply_status", "eq.Auto-reply"))
+    elif reply == "any":
+        f.append(("last_reply_status", "not.is.null"))
+    elif reply == "none":
+        f.append(("last_reply_status", "is.null"))
     if data_issue == "any":
         f.append(("data_issues", "neq.[]"))
     elif data_issue:
@@ -128,6 +138,7 @@ def _filter_params(
     has_phone: bool | None = None,
     contact: str | None = None,
     data_issue: str | None = None,
+    reply: str | None = Query(None, pattern="^(replied|auto|any|none)$"),
 ) -> dict[str, Any]:
     return locals()
 
@@ -173,6 +184,7 @@ async def export_doctors(
         ("Date of Birth", "date_of_birth"), ("Date of Anniversary", "date_of_anniversary"),
         ("Emails Sent", "emails_sent"), ("Last Contact", "last_contact_at"), ("Last Status", "last_contact_status"),
         ("WhatsApp Send Status", "last_whatsapp_status"), ("WhatsApp Send Date", "last_whatsapp_at"),
+        ("Reply Type", "last_reply_status"), ("Reply Channel", "last_reply_channel"), ("Reply Date", "last_reply_at"), ("Reply", "last_reply_text"),
         ("Data Issues", "data_issues"),
     ]
     buf = io.StringIO()

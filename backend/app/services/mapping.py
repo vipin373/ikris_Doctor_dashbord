@@ -310,6 +310,22 @@ def _event_status(value: str | None, rule: dict[str, Any], error: str | None) ->
     return value.strip()
 
 
+REPLY_RE = re.compile(r"^\s*(auto[\s-]*reply|out[\s-]*of[\s-]*office|repl(?:ied|y))?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})?\s*[:\-–]?\s*(.*)$", re.I | re.S)
+
+
+def parse_reply(value: Any, formats: list[str]) -> tuple[str, datetime | None, str] | None:
+    """'REPLIED 04/09/2026: text' / 'AUTO-REPLY 19/08/2026: text' / plain text
+    -> (status, date, text). Status is 'Auto-reply' or 'Replied'."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    m = REPLY_RE.match(text)
+    kind, date_s, body = (m.group(1), m.group(2), m.group(3)) if m else (None, None, text)
+    auto = bool(kind and re.match(r"auto|out", kind, re.I))
+    occurred = parse_date(date_s, formats) if date_s else None
+    return ("Auto-reply" if auto else "Replied", occurred, (body or text).strip()[:2000])
+
+
 def _next_occurrence(counts: dict[str, int], key: str) -> int:
     n = counts.get(key, 0)
     counts[key] = n + 1
@@ -328,7 +344,7 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
     event_rules: list[dict[str, Any]] = mapping.get("events", [])
     key_counts: dict[str, int] = {}
     for rule in event_rules:
-        for key in ("status_column", "date_column", "subject_column", "error_column", "detail_column"):
+        for key in ("status_column", "date_column", "subject_column", "error_column", "detail_column", "reply_column"):
             if rule.get(key):
                 used_headers.add(rule[key])
     if mapping.get("sub_department", {}).get("column"):
@@ -400,6 +416,28 @@ def map_doctor_tab(ctx: TabContext, values: list[list[Any]]) -> TabResult:
 
         events = []
         for rule in event_rules:
+            if rule.get("reply_column"):
+                # Doctor's reply recorded in the sheet: an INBOUND event
+                reply = parse_reply(raw.get(rule["reply_column"]), formats)
+                if not reply:
+                    continue
+                r_status, r_date, r_text = reply
+                event = {
+                    "channel": rule.get("channel", "EMAIL"),
+                    "direction": "INBOUND",
+                    "event_type": rule.get("event_type", "Reply"),
+                    "status": r_status,
+                    "subject": None,
+                    "detail": r_text or None,
+                    "campaign": rule.get("campaign"),
+                    "occurred_at": r_date.isoformat() if r_date else None,
+                }
+                event["external_key"] = record_hash({
+                    "s": ctx.spreadsheet_id, "t": ctx.sheet_name, "k": dedupe_key, "r": rule.get("event_type"),
+                    "d": event["occurred_at"], "x": r_text, "st": r_status,
+                })[:24]
+                events.append(event)
+                continue
             error = raw.get(rule.get("error_column", "")) if rule.get("error_column") else None
             if rule.get("status_from_date"):
                 # "Sent On" style columns: a date means it was sent that day

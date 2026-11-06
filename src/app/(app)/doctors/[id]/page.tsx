@@ -161,18 +161,23 @@ export default function DoctorProfilePage() {
                     <li key={e.id} className="relative">
                       <span className={cn(
                         "absolute -left-[31px] top-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-4 ring-white",
-                        statusTone(e.status) === "green" ? "bg-emerald-500" : statusTone(e.status) === "red" ? "bg-red-500" : "bg-amber-400",
+                        e.direction === "INBOUND" ? (e.status === "Replied" ? "bg-glow-500" : "bg-slate-400")
+                          : statusTone(e.status) === "green" ? "bg-sage-500" : statusTone(e.status) === "red" ? "bg-red-500" : "bg-glow-400",
                       )} />
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-semibold uppercase tracking-wide text-ink">
-                          {e.channel === "EMAIL" ? "Email" : e.channel === "WHATSAPP" ? "WhatsApp" : e.channel} · {e.event_type}
+                          {e.direction === "INBOUND" ? "↩ " : ""}{e.channel === "EMAIL" ? "Email" : e.channel === "WHATSAPP" ? "WhatsApp" : e.channel} · {e.event_type}
                         </span>
                         <Badge tone={statusTone(e.status)}>{e.status}</Badge>
                         <span className="text-xs text-ink-soft">{e.occurred_at ? formatDateTime(e.occurred_at) : "Date not recorded in sheet"}</span>
                       </div>
                       {e.subject && <p className="mt-1 text-sm text-ink">Subject: {e.subject}</p>}
                       {e.campaign && <p className="mt-0.5 text-xs text-ink-soft">Campaign: {e.campaign}</p>}
-                      {e.detail && <p className="mt-0.5 text-xs text-ink-muted">{e.detail}</p>}
+                      {e.detail && (e.direction === "INBOUND" ? (
+                        <blockquote className="mt-1.5 whitespace-pre-line rounded-xl border-l-2 border-glow-400 bg-cream/60 px-3 py-2 text-[13px] leading-relaxed text-ink">
+                          {e.detail}
+                        </blockquote>
+                      ) : <p className="mt-0.5 text-xs text-ink-muted">{e.detail}</p>)}
                     </li>
                   ))}
                 </ol>
