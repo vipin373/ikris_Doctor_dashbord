@@ -2,13 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Briefcase, Cake, CalendarDays, ChevronDown, ChevronsLeft, ChevronsRight, Dna, FileSpreadsheet,
-  FileText, HeartPulse, Inbox, LayoutDashboard, LayoutGrid, LogOut, Loader2, Menu, MessageSquareHeart, Pill, RefreshCw, Search, Send, Shield, Sparkles, Stethoscope,
+  FileText, Globe2, HeartPulse, Inbox, LayoutDashboard, LayoutGrid, LogOut, Loader2, Menu, MessageSquareHeart, Pill, RefreshCw, Search, Send, Shield, Sparkles, Stethoscope,
   UserPlus, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
@@ -57,6 +57,25 @@ function useNav(): NavItem[] {
   }
   items.push(
     { href: "/fda", label: "FDA", icon: Pill },
+    {
+      href: "/drug-intel", label: "International Drug Intelligence", icon: Globe2,
+      children: [
+        { href: "/drug-intel", label: "Drug Dashboard" },
+        { href: "/drug-intel/drugs", label: "Drug Master Database" },
+        { href: "/drug-intel/drugs?country=US&status=Approved", label: "USA Drug Approvals" },
+        { href: "/drug-intel/drugs?region=Europe&status=Approved", label: "Europe Drug Approvals" },
+        { href: "/drug-intel/drugs?country=JP", label: "Japan Drug Approvals" },
+        { href: "/drug-intel/drugs?oncology=true", label: "Oncology Medicines" },
+        { href: "/drug-intel/drugs?rare=true", label: "Rare Disease Medicines" },
+        { href: "/drug-intel/drugs?orphan=true", label: "Orphan Drugs" },
+        { href: "/drug-intel/drugs?preset=recent&sort=recent", label: "Recently Approved" },
+        { href: "/drug-intel/compare", label: "Drug Comparison" },
+        { href: "/drug-intel/mapping", label: "Doctor–Drug Mapping" },
+        { href: "/drug-intel/requests", label: "NPP Medicine Requests" },
+        { href: "/drug-intel/verification", label: "Regulatory Verification" },
+        { href: "/drug-intel/import", label: "Data Import & Sync" },
+      ],
+    },
     { href: "/templates", label: "Email Templates", icon: FileText },
     { href: "/calendar", label: "Calendar", icon: CalendarDays },
     { href: "/birthdays", label: "Birthdays", icon: Cake },
@@ -71,6 +90,39 @@ function useNav(): NavItem[] {
     );
   }
   return items;
+}
+
+function SubNavWithQuery(props: { items: NavItem[]; onNavigate?: () => void; isActive: (href: string) => boolean }) {
+  const params = useSearchParams();
+  return <SubNav {...props} search={params.toString()} />;
+}
+
+/** Sub-items may carry a query (e.g. /drug-intel/drugs?oncology=true): those match path and query exactly. */
+function SubNav({ items, onNavigate, isActive, search }: { items: NavItem[]; onNavigate?: () => void; isActive: (href: string) => boolean; search: string | null }) {
+  const pathname = usePathname();
+  const childActive = (href: string) => {
+    if (!href.startsWith("/drug-intel")) return isActive(href);
+    const [path, query = ""] = href.split("?");
+    return pathname === path && (search === null ? query === "" : new URLSearchParams(query).toString() === search);
+  };
+  return (
+    <>
+      {items.map((c) => (
+        <Link
+          key={c.href}
+          href={c.href}
+          onClick={onNavigate}
+          className={cn(
+            "relative block rounded-lg px-2.5 py-1.5 text-xs transition-colors duration-200",
+            childActive(c.href) ? "bg-white/[0.09] font-semibold text-white" : "text-walnut-200 hover:bg-white/[0.05] hover:text-white",
+          )}
+        >
+          {childActive(c.href) && <span aria-hidden className="absolute -left-[13px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-glow-400 shadow-[0_0_8px_rgba(213,133,31,0.8)]" />}
+          {c.label}
+        </Link>
+      ))}
+    </>
+  );
 }
 
 function initials(name: string): string {
@@ -136,20 +188,9 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
               </Link>
               {!collapsed && item.children && item.children.length > 0 && (active || item.children.some((c) => isActive(c.href))) && (
                 <div className="ml-[22px] mt-1 space-y-0.5 border-l border-white/10 pl-3 animate-fade-in">
-                  {item.children.map((c) => (
-                    <Link
-                      key={c.href}
-                      href={c.href}
-                      onClick={onNavigate}
-                      className={cn(
-                        "relative block rounded-lg px-2.5 py-1.5 text-xs transition-colors duration-200",
-                        isActive(c.href) ? "bg-white/[0.09] font-semibold text-white" : "text-walnut-200 hover:bg-white/[0.05] hover:text-white",
-                      )}
-                    >
-                      {isActive(c.href) && <span aria-hidden className="absolute -left-[13px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-glow-400 shadow-[0_0_8px_rgba(213,133,31,0.8)]" />}
-                      {c.label}
-                    </Link>
-                  ))}
+                  <React.Suspense fallback={<SubNav items={item.children} onNavigate={onNavigate} isActive={isActive} search={null} />}>
+                    <SubNavWithQuery items={item.children} onNavigate={onNavigate} isActive={isActive} />
+                  </React.Suspense>
                 </div>
               )}
             </div>

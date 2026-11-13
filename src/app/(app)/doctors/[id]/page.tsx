@@ -18,6 +18,7 @@ import { EmptyState, ErrorState, Skeleton, Tooltip } from "@/components/ui/misc"
 import { api, ApiError } from "@/lib/api";
 import type { CommEvent, Doctor, SourceRow } from "@/lib/types";
 import { CategoryPanel } from "@/components/npp/category-panel";
+import { DoctorMedicines } from "@/components/drug-intel/doctor-medicines";
 import { CategoryBadge } from "@/components/npp/shared";
 import { cn, DEPARTMENT_LABEL, formatDate, formatDateTime, formatDayMonth, ISSUE_LABEL, whatsappLink } from "@/lib/utils";
 
@@ -190,6 +191,7 @@ export default function DoctorProfilePage() {
 
         <div className="space-y-5">
           {d.department === "NPP" && <CategoryPanel doctorId={d.id} category={d.category} />}
+          <DoctorMedicines doctorId={d.id} />
           <Card>
             <CardHeader title="Contact" />
             <CardBody>
