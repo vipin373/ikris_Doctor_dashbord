@@ -57,6 +57,8 @@ function useNav(): NavItem[] {
   }
   items.push(
     { href: "/fda", label: "FDA", icon: Pill },
+    { href: "/ema", label: "EMA", icon: Pill },
+    { href: "/pmda", label: "PMDA", icon: Pill },
     {
       href: "/drug-intel", label: "International Drug Intelligence", icon: Globe2,
       children: [

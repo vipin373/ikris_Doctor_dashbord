@@ -14,6 +14,8 @@ import { Dialog, EmptyState, ErrorState, Pagination, Skeleton, StatCard, Td, Th 
 import { api } from "@/lib/api";
 import { AREA_LABEL, AREA_TONE, fdaDate, INDIA_LABEL, INDIA_TONE, type Classification, type FdaDrug, type FdaOverview, type SyncRun } from "@/lib/fda";
 import { formatDateTime, number } from "@/lib/utils";
+import { REGULATORS, useRegulator, type RegulatorCode } from "@/lib/regulator";
+import { RegSyncCard } from "@/components/fda/reg-sync";
 
 export function AreaBadge({ value }: { value?: string | null }) {
   const v = value || "NEEDS_REVIEW";
@@ -27,6 +29,8 @@ export function IndiaBadge({ value }: { value?: string | null }) {
 
 export function DrugIntelligence() {
   const { me } = useAuth();
+  const R = useRegulator();
+  const [orphan, setOrphan] = React.useState(false);
   const qc = useQueryClient();
   const [q, setQ] = React.useState("");
   const [debounced, setDebounced] = React.useState("");
@@ -40,10 +44,10 @@ export function DrugIntelligence() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const overview = useQuery({ queryKey: ["fda-overview"], queryFn: () => api.get<FdaOverview>("/fda/overview") });
+  const overview = useQuery({ queryKey: ["fda-overview", R.code], queryFn: () => api.get<FdaOverview>("/fda/overview", { regulator: R.code }) });
   const drugs = useQuery({
-    queryKey: ["fda-drugs", debounced, dept, india, sort, page],
-    queryFn: () => api.get<{ items: FdaDrug[]; total: number }>("/fda/drugs", { q: debounced, department: dept, india, sort, page, page_size: 25 }),
+    queryKey: ["fda-drugs", R.code, debounced, dept, india, sort, orphan, page],
+    queryFn: () => api.get<{ items: FdaDrug[]; total: number }>("/fda/drugs", { q: debounced, department: dept, india, sort, page, page_size: 25, regulator: R.code, orphan: orphan || undefined }),
   });
 
   const by = overview.data?.by_department ?? {};
@@ -51,7 +55,7 @@ export function DrugIntelligence() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Not approved in India" value={overview.isLoading ? "…" : number(overview.data?.total)}
-          hint={overview.data ? `of ${number(overview.data.total_all)} FDA drugs` : undefined} />
+          hint={overview.data ? `of ${number(overview.data.total_all)} ${R.short} drugs` : undefined} />
         <StatCard label="Oncology" value={overview.isLoading ? "…" : number(by.ONCOLOGY)} tone="sky" />
         <StatCard label="Hematology" value={overview.isLoading ? "…" : number(by.HEMATOLOGY)} tone="red" />
         <StatCard label="Rare Disease" value={overview.isLoading ? "…" : number(by.RARE_DISEASE)} tone="violet" />
@@ -67,16 +71,24 @@ export function DrugIntelligence() {
         qc.invalidateQueries({ queryKey: ["fda-drugs"] });
       }} />
 
-      <SyncCard overview={overview.data} isAdmin={me?.role === "ADMIN"} onDone={() => {
-        qc.invalidateQueries({ queryKey: ["fda-overview"] });
-        qc.invalidateQueries({ queryKey: ["fda-drugs"] });
-      }} />
+      {R.code === "FDA" ? (
+        <SyncCard overview={overview.data} isAdmin={me?.role === "ADMIN"} onDone={() => {
+          qc.invalidateQueries({ queryKey: ["fda-overview"] });
+          qc.invalidateQueries({ queryKey: ["fda-drugs"] });
+        }} />
+      ) : (
+        <RegSyncCard overview={overview.data} isAdmin={me?.role === "ADMIN"} onDone={() => {
+          qc.invalidateQueries({ queryKey: ["fda-overview"] });
+          qc.invalidateQueries({ queryKey: ["fda-drugs"] });
+          qc.invalidateQueries({ queryKey: ["new-molecules"] });
+        }} />
+      )}
 
       <Card>
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search drug, ingredient, manufacturer, NDA/BLA…" className="pl-8" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search drug, ingredient, manufacturer, ${R.numberHint}…`} className="pl-8" />
           </div>
           <Select value={dept} onChange={(e) => { setDept(e.target.value); setPage(1); }} className="w-auto" aria-label="Department">
             <option value="">All areas</option>
@@ -87,8 +99,8 @@ export function DrugIntelligence() {
             <option value="NEEDS_REVIEW">Needs review</option>
           </Select>
           <Select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }} className="w-auto" aria-label="Sort">
-            <option value="newest">Newest FDA approval first</option>
-            <option value="latest_action">Latest FDA action first</option>
+            <option value="newest">Newest {R.short} approval first</option>
+            <option value="latest_action">Latest {R.short} action first</option>
             <option value="name">Name A–Z</option>
           </Select>
           <Select value={india} onChange={(e) => { setIndia(e.target.value); setPage(1); }} className="w-auto" aria-label="India status">
@@ -97,22 +109,27 @@ export function DrugIntelligence() {
               <option value="unknown">India status: check manually</option>
               <option value="approved">Approved in India</option>
               <option value="not_checked">Not checked yet</option>
-              <option value="all">All FDA drugs</option>
+              <option value="all">All {R.short} drugs</option>
             </>}
           </Select>
+          {R.code !== "FDA" && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+              <input type="checkbox" checked={orphan} onChange={(e) => { setOrphan(e.target.checked); setPage(1); }} /> Orphan only
+            </label>
+          )}
           {me?.role === "ADMIN" && (overview.data?.needs_review ?? 0) > 0 && <AiReviewButton />}
         </div>
         {drugs.error ? <div className="p-4"><ErrorState error={drugs.error} onRetry={() => drugs.refetch()} /></div>
           : drugs.isLoading ? <div className="space-y-2 p-4"><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /></div>
           : !drugs.data?.items.length ? (
-            <EmptyState icon={ShieldCheck} title={overview.data?.total ? "No drugs match" : "No FDA data yet"}
+            <EmptyState icon={ShieldCheck} title={overview.data?.total ? "No drugs match" : `No ${R.short} data yet`}
               description={overview.data?.total ? "Try another search or area." : me?.role === "ADMIN"
-                ? "Run Sync Now above to load drugs from the FDA." : "An administrator needs to run the first FDA sync."} />
+                ? `Load ${R.short} data with the import card above.` : `An administrator needs to load the ${R.short} data first.`} />
           ) : (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead><tr><Th>Drug</Th><Th>Active ingredient</Th><Th>Department</Th><Th>FDA status</Th><Th>Approval date</Th><Th>India (CDSCO)</Th></tr></thead>
+                  <thead><tr><Th>Drug</Th><Th>Active ingredient</Th><Th>Department</Th><Th>{R.statusLabel}</Th><Th>Approval date</Th><Th>India (CDSCO)</Th></tr></thead>
                   <tbody>
                     {drugs.data.items.map((d) => (
                       <tr key={d.id} onClick={() => setOpenId(d.id)} className="cursor-pointer hover:bg-slate-50/70">
@@ -120,6 +137,7 @@ export function DrugIntelligence() {
                           <p className="font-medium text-ink">
                             {isNew(d.approval_date) && <span className="mr-1.5 rounded bg-emerald-600 px-1.5 py-0.5 align-middle text-[10px] font-bold text-white">NEW</span>}
                             {d.drug_name}
+                            {d.orphan && <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-violet-800">Orphan</span>}
                           </p>
                           <p className="text-[11px] text-ink-soft">{d.application_number}{d.manufacturer ? ` · ${d.manufacturer}` : ""}</p>
                         </Td>
@@ -130,7 +148,7 @@ export function DrugIntelligence() {
                               : (d.therapeutic_areas.length ? d.therapeutic_areas : [d.department]).map((a) => <AreaBadge key={a} value={a} />)}
                           </div>
                         </Td>
-                        <Td>{d.fda_status ? <Badge tone="green">{d.fda_status}</Badge> : <span className="text-xs text-ink-soft">Not in Drugs@FDA</span>}</Td>
+                        <Td>{d.fda_status ? <Badge tone="green">{d.fda_status}</Badge> : <span className="text-xs text-ink-soft">Not stated</span>}</Td>
                         <Td className="whitespace-nowrap tabular-nums">{fdaDate(d.approval_date)}</Td>
                         <Td><IndiaBadge value={d.india_status} /></Td>
                       </tr>
@@ -153,10 +171,11 @@ function isNew(approval?: string | null, days = 90): boolean {
 }
 
 function NewMoleculesCard() {
+  const R = useRegulator();
   const [days, setDays] = React.useState(180);
   const { data, isLoading } = useQuery({
-    queryKey: ["new-molecules", days],
-    queryFn: () => api.get<NewMolecule[]>("/fda/new-molecules", { days }),
+    queryKey: ["new-molecules", R.code, days],
+    queryFn: () => api.get<NewMolecule[]>("/fda/new-molecules", { days, regulator: R.code }),
   });
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   return (
@@ -164,7 +183,7 @@ function NewMoleculesCard() {
       <div className="flex flex-wrap items-center gap-2 border-b border-emerald-100 bg-emerald-50 px-5 py-2.5">
         <Sparkles className="h-4 w-4 text-emerald-700" />
         <p className="text-sm font-semibold text-emerald-900">New molecule alerts</p>
-        <span className="text-xs text-emerald-800">First FDA approval of an active ingredient, not approved in India · checked daily</span>
+        <span className="text-xs text-emerald-800">First {R.short} approval of an active ingredient, not approved in India{R.code === "FDA" ? " · checked daily" : ""}</span>
         <Select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-auto h-8 w-auto text-xs" aria-label="Period">
           <option value={30}>Last 30 days</option><option value={90}>Last 90 days</option><option value={180}>Last 6 months</option><option value={365}>Last 12 months</option>
         </Select>
@@ -172,7 +191,7 @@ function NewMoleculesCard() {
       {isLoading ? <div className="p-4"><Skeleton className="h-20" /></div> : !data?.length ? (
         <p className="px-5 py-4 text-sm text-ink-soft">No new molecules in this period.</p>
       ) : (
-        <div className="max-h-80 overflow-y-auto"><MoleculeList items={data} today={today} /></div>
+        <div className="max-h-80 overflow-y-auto"><MoleculeList items={data} today={today} regulator={R.short} /></div>
       )}
     </Card>
   );
@@ -299,11 +318,12 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 
 function AiReviewButton() {
   const qc = useQueryClient();
+  const R = useRegulator();
   const m = useMutation({
-    mutationFn: () => api.post<{ items: { status: string }[] }>("/fda/drugs/classify-ai?limit=8"),
+    mutationFn: () => api.post<{ items: { status: string }[] }>(`/fda/drugs/classify-ai?limit=8&regulator=${R.code}`),
     onSuccess: (r) => {
       const ok = r.items.filter((i) => i.status === "AUTO").length;
-      toast.success(`AI reviewed ${r.items.length}: ${ok} classified with a quote from the FDA label, ${r.items.length - ok} still need a person.`);
+      toast.success(`AI reviewed ${r.items.length}: ${ok} classified with a quote from the ${R.short} indication, ${r.items.length - ok} still need a person.`);
       qc.invalidateQueries({ queryKey: ["fda-overview"] });
       qc.invalidateQueries({ queryKey: ["fda-drugs"] });
     },
@@ -318,6 +338,7 @@ function AiReviewButton() {
 
 export function DrugDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { me } = useAuth();
+  const R0 = useRegulator();
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["fda-drug", id],
@@ -340,7 +361,7 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
   const kegg = useMutation({
     mutationFn: () => api.post<{ found: boolean; conflict: string | null }>(`/fda/drugs/${id}/kegg`),
     onSuccess: (r) => {
-      toast[r.found ? "success" : "info"](r.found ? (r.conflict ? "KEGG reference saved; it disagrees with FDA and is flagged for review." : "KEGG reference saved.") : "No KEGG entry found.");
+      toast[r.found ? "success" : "info"](r.found ? (r.conflict ? "KEGG reference saved; it disagrees with the regulator data and is flagged for review." : "KEGG reference saved.") : "No KEGG entry found.");
       qc.invalidateQueries({ queryKey: ["fda-drug", id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "KEGG lookup failed"),
@@ -357,16 +378,17 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
     onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
   const d = data?.drug;
+  const R = d?.regulator ? (REGULATORS[d.regulator as RegulatorCode] ?? R0) : R0;
   const current = data?.classifications?.[0];
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} wide title={d?.drug_name ?? "FDA drug"}
+    <Dialog open onOpenChange={(o) => !o && onClose()} wide title={d?.drug_name ?? `${R.short} drug`}
       description={d ? `${d.application_number} · ${d.fda_source}` : undefined}>
       {error ? <ErrorState error={error} /> : isLoading || !d ? <Skeleton className="h-64" /> : (
         <div className="space-y-4 text-sm">
           <div className="flex flex-wrap gap-2">
-            {d.drugs_at_fda_url && <a href={d.drugs_at_fda_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50">View FDA Source (Drugs@FDA) <ExternalLink className="h-3 w-3" /></a>}
-            {d.label_url && <a href={d.label_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50">FDA label (DailyMed) <ExternalLink className="h-3 w-3" /></a>}
-            {d.fda_source_url && <a href={d.fda_source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50">openFDA record <ExternalLink className="h-3 w-3" /></a>}
+            {d.drugs_at_fda_url && <a href={d.drugs_at_fda_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50">{R.recordLink} <ExternalLink className="h-3 w-3" /></a>}
+            {d.label_url && d.label_url !== d.drugs_at_fda_url && <a href={d.label_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50">{R.labelLink} <ExternalLink className="h-3 w-3" /></a>}
+            {d.fda_source_url && <a href={d.fda_source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50">{R.sourceLink} <ExternalLink className="h-3 w-3" /></a>}
           </div>
           {d.review_flags?.length ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{d.review_flags.map((f) => <p key={f}>{f}</p>)}</div>
@@ -382,25 +404,27 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
             <Field label="Strength" value={d.strength} />
             <Field label="Route" value={d.route} />
             <Field label="Therapeutic area" value={<div className="flex flex-wrap gap-1">{d.classification_status === "NEEDS_REVIEW" ? <AreaBadge value="NEEDS_REVIEW" /> : d.therapeutic_areas.map((a) => <AreaBadge key={a} value={a} />)}</div>} />
-            <Field label="FDA status" value={d.fda_status} />
+            <Field label={R.statusLabel} value={d.fda_status} />
+            {d.orphan !== null && d.orphan !== undefined && <Field label="Orphan designation" value={d.orphan ? "Yes (stated by source)" : "No"} />}
             <Field label="Approval date" value={fdaDate(d.approval_date)} />
-            <Field label="Latest FDA action" value={fdaDate(d.latest_action_date)} />
+            <Field label={`Latest ${R.short} update`} value={fdaDate(d.latest_action_date)} />
             <Field label="Marketing status" value={d.marketing_status} />
-            <Field label="Pharmacologic class" value={d.pharm_class?.join("; ")} />
+            <Field label={R.code === "FDA" ? "Pharmacologic class" : R.code === "EMA" ? "Pharmacotherapeutic group / ATC" : "Review category"} value={d.pharm_class?.join("; ")} />
             <Field label="Label effective" value={fdaDate(d.label_effective_date)} />
             <Field label="Last updated" value={formatDateTime(d.last_synced_at)} />
             <Field label="India (CDSCO)" value={<IndiaBadge value={d.india_status} />} />
             <Field label="KEGG source" value={data?.kegg ? <a className="text-brand-700 underline" href={data.kegg.kegg_source_url} target="_blank" rel="noreferrer">{data.kegg.kegg_id}</a> : (data?.kegg_enabled ? "Not fetched" : "KEGG not enabled")} />
           </dl>
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Indication (FDA label)</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Indication ({R.code === "FDA" ? "FDA label" : R.code === "EMA" ? "EMA therapeutic indication" : "PMDA approval note"})</p>
+            {R.code !== "FDA" && <p className="mb-1 text-[11px] text-ink-soft">{R.sourceNote}</p>}
             <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-md bg-slate-50 p-3 text-[13px] leading-relaxed text-ink">{d.indication || "Not available"}</p>
           </div>
           {d.india_evidence && <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-ink-muted"><b>India check:</b> {d.india_evidence}</p>}
           {data?.kegg?.conflict && <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{data.kegg.conflict}</p>}
           {current && (
             <div className="rounded-md border border-line p-3 text-xs">
-              <p className="font-medium text-ink">Classification: {AREA_LABEL[current.department] ?? current.department} · confidence {Math.round(current.confidence * 100)}% · {current.source === "FDA_LABEL_RULES" ? "FDA label evidence" : current.source === "OPENROUTER" ? `AI (${current.model})` : "Manual review"}</p>
+              <p className="font-medium text-ink">Classification: {AREA_LABEL[current.department] ?? current.department} · confidence {Math.round(current.confidence * 100)}% · {current.source === "FDA_LABEL_RULES" ? `${R.short} indication evidence` : current.source === "OPENROUTER" ? `AI (${current.model})` : "Manual review"}</p>
               <p className="mt-1 text-ink-muted">{current.reason}</p>
               {current.evidence?.length ? <p className="mt-1 text-ink-soft">Evidence: {current.evidence.slice(0, 8).map((e) => `“${e}”`).join(", ")}</p> : null}
             </div>
@@ -438,7 +462,7 @@ export function DrugDetail({ id, onClose }: { id: string; onClose: () => void })
                 </div>
               </div>
               <div>
-                <Label>Reason (based on the FDA label)</Label>
+                <Label>Reason (based on the {R.short} indication)</Label>
                 <Textarea rows={2} value={review.reason} onChange={(e) => setReview({ ...review, reason: e.target.value })} />
               </div>
               <div className="flex justify-end gap-2">

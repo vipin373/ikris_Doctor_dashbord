@@ -14,6 +14,7 @@ from ..core.config import get_settings
 from ..core.security import CurrentUser, get_current_user, require_admin
 from ..core.supabase import PostgREST, SupabaseError
 from ..services import bulk_import, cdsco_service, fda_service, kegg_service
+from ..services.regulators import REGULATOR_PATTERN
 from ..services import ai_message_service as ai
 from ..services.audit import audit
 from ..services.doctor_matcher import DRUG_COLUMNS, areas_label, doctor_areas, eligibility, recommend
@@ -37,8 +38,8 @@ INDIA_FILTER = {
 
 # ------------------------------------------------------------------ overview / config
 @router.get("/api/fda/overview")
-async def overview(user: CurrentUser = Depends(get_current_user)):
-    return await user.db().rpc("fda_overview")
+async def overview(regulator: str = Query("FDA", pattern=REGULATOR_PATTERN), user: CurrentUser = Depends(get_current_user)):
+    return await user.db().rpc("fda_overview", {"p_regulator": regulator})
 
 
 @router.get("/api/fda/config")
@@ -66,6 +67,8 @@ async def list_drugs(
     sendable: bool = False,
     india: Literal["not_approved", "approved", "unknown", "not_checked", "all"] = "not_approved",
     sort: Literal["newest", "latest_action", "name"] = "newest",
+    regulator: str = Query("FDA", pattern=REGULATOR_PATTERN),
+    orphan: bool | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
     user: CurrentUser = Depends(get_current_user),
@@ -73,7 +76,10 @@ async def list_drugs(
     order = {"newest": "approval_date.desc.nullslast,drug_name.asc",
              "latest_action": "latest_action_date.desc.nullslast,drug_name.asc",
              "name": "drug_name.asc"}[sort]
-    p: list[tuple[str, str]] = [("select", LIST_DRUG_COLUMNS + ",latest_action_date"), ("order", order)]
+    p: list[tuple[str, str]] = [("select", LIST_DRUG_COLUMNS + ",latest_action_date,regulator,orphan,application_type"),
+                                ("order", order), ("regulator", f"eq.{regulator}")]
+    if orphan is not None:
+        p.append(("orphan", f"is.{str(orphan).lower()}"))
     if sendable:
         india = "not_approved"
     if india != "all":
@@ -95,9 +101,10 @@ async def list_drugs(
 
 @router.get("/api/fda/new-molecules")
 async def new_molecules(days: int = Query(365, ge=7, le=1825), include_india_approved: bool = False,
+                        regulator: str = Query("FDA", pattern=REGULATOR_PATTERN),
                         user: CurrentUser = Depends(get_current_user)):
-    """First FDA approval of an active ingredient within the last `days` (newest first)."""
-    rows = await user.db().rpc("new_molecules", {"p_days": days})
+    """First approval of an active ingredient by this regulator within the last `days` (newest first)."""
+    rows = await user.db().rpc("new_molecules", {"p_days": days, "p_regulator": regulator})
     if not include_india_approved:
         rows = [r for r in rows if r.get("india_status") in ("NOT_FOUND", "MANUAL_NOT_APPROVED")]
     return rows
@@ -145,13 +152,15 @@ async def review_classification(drug_id: str, body: ReviewIn, request: Request, 
 
 
 @router.post("/api/fda/drugs/classify-ai")
-async def classify_needs_review(request: Request, limit: int = Query(5, ge=1, le=10), user: CurrentUser = Depends(require_admin)):
+async def classify_needs_review(request: Request, limit: int = Query(5, ge=1, le=10),
+                                regulator: str = Query("FDA", pattern=REGULATOR_PATTERN), user: CurrentUser = Depends(require_admin)):
     """Second opinion from OpenRouter for NEEDS_REVIEW drugs. Accepted only when it quotes the FDA label."""
     if not get_settings().openrouter_api_key:
         raise HTTPException(503, "OPENROUTER_API_KEY is not configured on the server.")
     db = user.db()
     rows, _ = await db.select("fda_drugs", [("select", "id,indication,classification_status"),
                                             ("classification_status", "eq.NEEDS_REVIEW"), ("indication", "not.is.null"),
+                                            ("regulator", f"eq.{regulator}"),
                                             ("order", "updated_at.asc"), ("limit", str(limit))])
     results = []
     for d in rows:
@@ -301,8 +310,8 @@ async def scheduled_sync(
 
 
 @router.get("/api/fda/sync/runs")
-async def sync_runs(user: CurrentUser = Depends(get_current_user)):
-    rows, _ = await user.db().select("fda_sync_runs", [
+async def sync_runs(regulator: str = Query("FDA", pattern=REGULATOR_PATTERN), user: CurrentUser = Depends(get_current_user)):
+    rows, _ = await user.db().select("fda_sync_runs", [("regulator", f"eq.{regulator}"),
         ("select", "id,status,mode,trigger,started_at,finished_at,new_count,updated_count,unchanged_count,failed_count,fetched_count,errors,source_last_updated"),
         ("order", "started_at.desc"), ("limit", "10")])
     return rows
@@ -454,14 +463,15 @@ async def fda_doctors(
 
 
 @router.get("/api/fda/doctors/{doctor_id}/recommendations")
-async def doctor_recommendations(doctor_id: str, q: str | None = None, user: CurrentUser = Depends(get_current_user)):
+async def doctor_recommendations(doctor_id: str, q: str | None = None, regulator: str = Query("FDA", pattern=REGULATOR_PATTERN),
+                                 user: CurrentUser = Depends(get_current_user)):
     db = user.db()
     rows, _ = await db.select("doctors", {"id": f"eq.{doctor_id}", "select": FDA_DOCTOR_COLUMNS})
     if not rows:
         raise HTTPException(404, "Doctor not found")
     doctor = rows[0]
     ok, until = eligibility(doctor)
-    rec = await recommend(db, doctor, limit=15, q=q)
+    rec = await recommend(db, doctor, limit=15, q=q, regulator=regulator)
     return {"doctor": {**doctor, "eligible": ok, "eligible_from": until}, **rec}
 
 

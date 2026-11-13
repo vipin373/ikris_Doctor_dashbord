@@ -12,11 +12,13 @@ import { Dialog, EmptyState, Pagination, Skeleton } from "@/components/ui/misc";
 import { api } from "@/lib/api";
 import { AREA_LABEL, CHANNEL_LABEL, fdaDate, FREQUENCY_LABEL, type Channel, type FdaConfig, type FdaDoctor, type FdaDrug, type MessageTemplate, type Method } from "@/lib/fda";
 import { cn, DEPARTMENT_LABEL } from "@/lib/utils";
+import { useRegulator } from "@/lib/regulator";
 import { AreaBadge } from "./drugs";
 import { CampaignReview, generateAll } from "./review";
 import { VariableChips } from "./variables";
 
 export function SingleMessage({ config }: { config?: FdaConfig }) {
+  const R = useRegulator();
   const [doctor, setDoctor] = React.useState<FdaDoctor | null>(null);
   const [drug, setDrug] = React.useState<FdaDrug | null>(null);
   const [channel, setChannel] = React.useState<Channel>("WHATSAPP");
@@ -37,7 +39,7 @@ export function SingleMessage({ config }: { config?: FdaConfig }) {
       const res = await api.post<{ campaign: { id: string }; counts: { pending: number; skipped: number } }>("/campaigns", {
         name: `Single: ${doctor.doctor_name} · ${drug.drug_name}`.slice(0, 200), mode: "SINGLE", objective: objective || null,
         channel, message_method: method, drug_mode: "MANUAL", drug_id: drug.id, template_id: method === "TEMPLATE" ? templateId : null,
-        doctor_ids: [doctor.id],
+        doctor_ids: [doctor.id], regulator: R.code,
       });
       if (res.counts.pending) {
         await generateAll(res.campaign.id, () => undefined, method === "MANUAL" ? { subject: manualSubject, body: manualBody } : undefined);
@@ -72,7 +74,7 @@ export function SingleMessage({ config }: { config?: FdaConfig }) {
         <Step n={1} title="Select doctor" done={!!doctor}>
           <DoctorPicker value={doctor} onChange={(d) => { setDoctor(d); setDrug(null); }} />
         </Step>
-        <Step n={2} title="FDA drug" done={!!drug} disabled={!doctor}>
+        <Step n={2} title={`${R.short} drug`} done={!!drug} disabled={!doctor}>
           {doctor && <DrugPicker doctor={doctor} value={drug} onChange={setDrug} />}
         </Step>
       </div>
@@ -99,13 +101,13 @@ export function SingleMessage({ config }: { config?: FdaConfig }) {
               <div>
                 <Label>Message objective (optional)</Label>
                 <Textarea rows={2} value={objective} onChange={(e) => setObjective(e.target.value)} maxLength={500}
-                  placeholder="e.g. Share the FDA update and offer help with availability / named-patient access." />
-                <p className="mt-1 text-[11px] text-ink-soft">The AI writes from the FDA record only; any figure not in the FDA data sends the draft to review.</p>
+                  placeholder={`e.g. Share the ${R.short} update and offer help with availability / named-patient access.`} />
+                <p className="mt-1 text-[11px] text-ink-soft">The AI writes from the {R.short} record only; any figure not in the {R.short} data sends the draft to review.</p>
               </div>
             )}
             {method === "MANUAL" && (
               <div className="space-y-2">
-                {channel !== "WHATSAPP" && <div><Label>Email subject</Label><Input value={manualSubject} onChange={(e) => setManualSubject(e.target.value)} placeholder="FDA Drug Information Update – {{drug_name}}" /></div>}
+                {channel !== "WHATSAPP" && <div><Label>Email subject</Label><Input value={manualSubject} onChange={(e) => setManualSubject(e.target.value)} placeholder={R.subjectExample} /></div>}
                 <div>
                   <Label>Message</Label>
                   <Textarea id="manual-body" rows={9} value={manualBody} onChange={(e) => setManualBody(e.target.value)}
@@ -118,7 +120,7 @@ export function SingleMessage({ config }: { config?: FdaConfig }) {
         </Step>
         <Card>
           <CardBody className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-ink-soft">{!doctor ? "Select a doctor first." : !doctor.eligible ? `Doctor is not eligible until ${fdaDate(doctor.eligible_from)}.` : !drug ? "Choose an FDA drug." : "You will see a preview before anything is sent."}</p>
+            <p className="text-xs text-ink-soft">{!doctor ? "Select a doctor first." : !doctor.eligible ? `Doctor is not eligible until ${fdaDate(doctor.eligible_from)}.` : !drug ? `Choose a ${R.short} drug.` : "You will see a preview before anything is sent."}</p>
             <Button disabled={!canGenerate || busy} onClick={generate}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {method === "AI" ? "Generate with AI" : "Create preview"}
             </Button>
@@ -130,11 +132,12 @@ export function SingleMessage({ config }: { config?: FdaConfig }) {
 }
 
 function SummaryStrip({ doctor, drug, channel, method }: { doctor: FdaDoctor | null; drug: FdaDrug | null; channel: Channel; method: Method }) {
+  const R = useRegulator();
   return (
     <div className="grid grid-cols-2 gap-3 rounded-lg border border-line bg-white p-4 text-sm md:grid-cols-5">
       <div><p className="text-[11px] uppercase text-ink-soft">Doctor</p><p className="font-medium">{doctor?.doctor_name}</p></div>
       <div><p className="text-[11px] uppercase text-ink-soft">Drug</p><p className="font-medium">{drug?.drug_name}</p></div>
-      <div><p className="text-[11px] uppercase text-ink-soft">FDA status</p><p className="font-medium">{drug?.fda_status ?? "—"}{drug?.approval_date ? ` · ${fdaDate(drug.approval_date)}` : ""}</p></div>
+      <div><p className="text-[11px] uppercase text-ink-soft">{R.statusLabel}</p><p className="font-medium">{drug?.fda_status ?? "—"}{drug?.approval_date ? ` · ${fdaDate(drug.approval_date)}` : ""}</p></div>
       <div><p className="text-[11px] uppercase text-ink-soft">Channel</p><p className="font-medium">{CHANNEL_LABEL[channel]}</p></div>
       <div><p className="text-[11px] uppercase text-ink-soft">Method</p><p className="font-medium">{method === "AI" ? "AI" : method === "TEMPLATE" ? "Template" : "Manual"}</p></div>
     </div>
@@ -270,17 +273,18 @@ function OutreachDialog({ d, onClose }: { d: FdaDoctor; onClose: (upd?: Partial<
 }
 
 function DrugPicker({ doctor, value, onChange }: { doctor: FdaDoctor; value: FdaDrug | null; onChange: (d: FdaDrug) => void }) {
+  const R = useRegulator();
   const [q, setQ] = React.useState("");
   const [dq, setDq] = React.useState("");
   React.useEffect(() => { const t = setTimeout(() => setDq(q), 300); return () => clearTimeout(t); }, [q]);
   const rec = useQuery({
-    queryKey: ["fda-recs", doctor.id, dq],
-    queryFn: () => api.get<{ areas: string[]; areas_label: string; items: FdaDrug[]; note?: string }>(`/fda/doctors/${doctor.id}/recommendations`, { q: dq }),
+    queryKey: ["fda-recs", R.code, doctor.id, dq],
+    queryFn: () => api.get<{ areas: string[]; areas_label: string; items: FdaDrug[]; note?: string }>(`/fda/doctors/${doctor.id}/recommendations`, { q: dq, regulator: R.code }),
   });
   const general = rec.data && rec.data.areas.length === 0;
   const manual = useQuery({
-    queryKey: ["fda-drugs-manual", dq],
-    queryFn: () => api.get<{ items: FdaDrug[] }>("/fda/drugs", { q: dq, sendable: true, page_size: 15 }),
+    queryKey: ["fda-drugs-manual", R.code, dq],
+    queryFn: () => api.get<{ items: FdaDrug[] }>("/fda/drugs", { q: dq, sendable: true, page_size: 15, regulator: R.code }),
     enabled: !!general && dq.length >= 2,
   });
   const items = general ? manual.data?.items ?? [] : rec.data?.items ?? [];
@@ -288,11 +292,11 @@ function DrugPicker({ doctor, value, onChange }: { doctor: FdaDoctor; value: Fda
     <div className="space-y-3">
       <p className="text-xs text-ink-soft">
         {general ? rec.data?.note + " Search for a drug manually if appropriate."
-          : <>Recommended FDA drugs for <b>{rec.data?.areas_label ?? "…"}</b>, based on the FDA label classification. Drugs that need review are never shown.</>}
+          : <>Recommended {R.short} drugs for <b>{rec.data?.areas_label ?? "…"}</b>, based on the {R.short} indication classification. Only drugs not approved in India are offered; drugs that need review are never shown.</>}
       </p>
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={general ? "Search FDA drugs (2+ letters)…" : "Filter recommendations…"} />
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={general ? `Search ${R.short} drugs (2+ letters)…` : "Filter recommendations…"} />
       {rec.isLoading ? <Skeleton className="h-32" /> : !items.length ? (
-        <EmptyState title={general ? "Search to choose a drug" : "No reviewed FDA drugs for this specialty yet"} description={general ? undefined : "Run the FDA sync or review classifications in Drug Intelligence."} />
+        <EmptyState title={general ? "Search to choose a drug" : `No reviewed ${R.short} drugs for this specialty yet`} description={general ? undefined : `Load the ${R.short} data or review classifications in Drug Intelligence.`} />
       ) : (
         <div className="max-h-80 divide-y divide-line overflow-y-auto rounded-md border border-line">
           {items.map((d) => (
@@ -316,13 +320,14 @@ function DrugPicker({ doctor, value, onChange }: { doctor: FdaDoctor; value: Fda
 }
 
 export function TemplateSelect({ channel, value, onChange }: { channel: Channel; value: string; onChange: (id: string) => void }) {
+  const R = useRegulator();
   const { data, isLoading } = useQuery({
-    queryKey: ["fda-templates", "ACTIVE"],
-    queryFn: () => api.get<MessageTemplate[]>("/fda/templates", { status: "ACTIVE" }),
+    queryKey: ["fda-templates", R.code, "ACTIVE"],
+    queryFn: () => api.get<MessageTemplate[]>("/fda/templates", { status: "ACTIVE", regulator: R.code }),
   });
   const usable = (data ?? []).filter((t) => t.channel === "BOTH" || t.channel === channel);
   if (isLoading) return <Skeleton className="h-9" />;
-  if (!usable.length) return <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-ink-muted">No active {CHANNEL_LABEL[channel]} template yet. Create and activate one in the Templates tab.</p>;
+  if (!usable.length) return <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-ink-muted">No active {R.short} {CHANNEL_LABEL[channel]} template yet. Create and activate one in the Templates tab.</p>;
   return (
     <div>
       <Label>Template</Label>

@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Dialog, StatCard, Td, Th } from "@/components/ui/misc";
 import { api } from "@/lib/api";
+import { useRegulator } from "@/lib/regulator";
 import { AREA_LABEL, CHANNEL_LABEL, fdaDate, type Channel, type FdaConfig, type FdaDrug, type Method } from "@/lib/fda";
 import { cn, DEPARTMENT_LABEL, number } from "@/lib/utils";
 import { AreaBadge } from "./drugs";
@@ -223,6 +224,7 @@ function ValidationView({ v, onContinue }: { v: Validation; onContinue: (ids: st
 function BulkCampaignSetup({ config, doctorIds, filename, onBack, onCreated }: {
   config?: FdaConfig; doctorIds: string[]; filename: string; onBack: () => void; onCreated: (id: string) => void;
 }) {
+  const R = useRegulator();
   const [name, setName] = React.useState(`Bulk: ${filename}`.slice(0, 200));
   const [drugMode, setDrugMode] = React.useState<"AUTO" | "MANUAL">("AUTO");
   const [drug, setDrug] = React.useState<FdaDrug | null>(null);
@@ -233,8 +235,8 @@ function BulkCampaignSetup({ config, doctorIds, filename, onBack, onCreated }: {
   const [objective, setObjective] = React.useState("");
   const [progress, setProgress] = React.useState<{ made: number; pending: number } | null>(null);
   const drugs = useQuery({
-    queryKey: ["fda-drugs-bulk", q],
-    queryFn: () => api.get<{ items: FdaDrug[] }>("/fda/drugs", { q, sendable: true, page_size: 12 }),
+    queryKey: ["fda-drugs-bulk", R.code, q],
+    queryFn: () => api.get<{ items: FdaDrug[] }>("/fda/drugs", { q, sendable: true, page_size: 12, regulator: R.code }),
     enabled: drugMode === "MANUAL",
   });
 
@@ -243,9 +245,9 @@ function BulkCampaignSetup({ config, doctorIds, filename, onBack, onCreated }: {
       setProgress({ made: 0, pending: doctorIds.length });
       const res = await api.post<{ campaign: { id: string }; counts: { doctors: number; pending: number; skipped: number } }>("/campaigns", {
         name, mode: "BULK", objective: objective || null, channel, message_method: method, drug_mode: drugMode,
-        drug_id: drugMode === "MANUAL" ? drug?.id : null, template_id: method === "TEMPLATE" ? templateId : null, doctor_ids: doctorIds,
+        drug_id: drugMode === "MANUAL" ? drug?.id : null, template_id: method === "TEMPLATE" ? templateId : null, doctor_ids: doctorIds, regulator: R.code,
       });
-      toast.info(`${res.counts.pending} doctors matched to an FDA drug; ${res.counts.skipped} skipped (reasons shown in review).`);
+      toast.info(`${res.counts.pending} doctors matched to a ${R.short} drug; ${res.counts.skipped} skipped (reasons shown in review).`);
       await generateAll(res.campaign.id, (made, pending) => setProgress({ made, pending }));
       onCreated(res.campaign.id);
     } catch (e) {
@@ -259,21 +261,21 @@ function BulkCampaignSetup({ config, doctorIds, filename, onBack, onCreated }: {
     <div className="space-y-5">
       <Button variant="outline" size="sm" onClick={onBack}><ArrowLeft className="h-3.5 w-3.5" /> Back to validation</Button>
       <Card>
-        <CardHeader title={`4. Campaign for ${number(doctorIds.length)} doctors`} description="Each doctor is matched to FDA drugs for their own specialty. Unrelated drugs are never used." />
+        <CardHeader title={`4. Campaign for ${number(doctorIds.length)} doctors`} description={`Each doctor is matched to ${R.short} drugs for their own specialty. Unrelated drugs are never used.`} />
         <CardBody className="grid gap-5 lg:grid-cols-2">
           <div className="space-y-4">
             <div><Label>Campaign name</Label><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={200} /></div>
             <div>
               <Label>Drug selection</Label>
               <div className="grid grid-cols-2 gap-2">
-                <Choice active={drugMode === "AUTO"} onClick={() => setDrugMode("AUTO")}><Sparkles className="h-4 w-4" />Automatically match FDA drugs</Choice>
-                <Choice active={drugMode === "MANUAL"} onClick={() => setDrugMode("MANUAL")}><Search className="h-4 w-4" />Select FDA drug manually</Choice>
+                <Choice active={drugMode === "AUTO"} onClick={() => setDrugMode("AUTO")}><Sparkles className="h-4 w-4" />Automatically match {R.short} drugs</Choice>
+                <Choice active={drugMode === "MANUAL"} onClick={() => setDrugMode("MANUAL")}><Search className="h-4 w-4" />Select {R.short} drug manually</Choice>
               </div>
               {drugMode === "AUTO" ? (
                 <p className="mt-2 text-xs text-ink-soft">Oncology doctors get oncology drugs, hematology doctors hematology drugs, rare-disease doctors rare-disease drugs, preferring drugs each doctor has not received yet. Doctors without a matching specialty are skipped.</p>
               ) : (
                 <div className="mt-2 space-y-2">
-                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search FDA drugs…" />
+                  <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${R.short} drugs…`} />
                   <div className="max-h-56 divide-y divide-line overflow-y-auto rounded-md border border-line">
                     {(drugs.data?.items ?? []).map((d) => (
                       <button key={d.id} onClick={() => setDrug(d)} className={cn("flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50", drug?.id === d.id && "bg-brand-50")}>

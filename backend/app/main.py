@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import calendar, campaigns, core, doctors, drug_intel, fda, fda_templates, google_sheets, new_doctors, npp_crm, templates
+from .api import calendar, campaigns, core, doctors, drug_intel, fda, regulators, fda_templates, google_sheets, new_doctors, npp_crm, templates
 from .core.config import get_settings
 from .core.security import client_ip, rate_limiter
 from .core.supabase import ServiceUnavailable, SupabaseError
@@ -80,5 +80,6 @@ app.include_router(campaigns.router)
 app.include_router(new_doctors.router)
 app.include_router(npp_crm.router)
 app.include_router(drug_intel.router)
+app.include_router(regulators.router)
 
 _ = HTTPException

@@ -25,6 +25,8 @@ export const AREA_TONE: Record<string, "sky" | "red" | "violet" | "neutral" | "a
 export const CHANNEL_LABEL: Record<string, string> = { WHATSAPP: "WhatsApp", EMAIL: "Email", BOTH: "WhatsApp + Email" };
 export const TEMPLATE_TYPES: Record<string, string> = {
   FDA_DRUG_UPDATE: "FDA Drug Update",
+  EMA_DRUG_UPDATE: "EMA Drug Update",
+  PMDA_DRUG_UPDATE: "PMDA Drug Update",
   NEW_DRUG: "New Drug",
   PRODUCT_INFORMATION: "Product Information",
   AVAILABILITY: "Availability",
@@ -71,6 +73,8 @@ export interface FdaDrug {
   india_status?: IndiaStatus | null;
   india_evidence?: string | null;
   india_checked_at?: string | null;
+  regulator?: "FDA" | "EMA" | "PMDA";
+  orphan?: boolean | null;
 }
 
 export type IndiaStatus = "APPROVED" | "NOT_FOUND" | "UNKNOWN" | "MANUAL_APPROVED" | "MANUAL_NOT_APPROVED";

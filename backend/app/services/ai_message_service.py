@@ -14,19 +14,23 @@ from typing import Any
 import httpx
 
 from ..core.config import get_settings
+from .regulators import info as regulator_info
 from .whatsapp_service import ProviderNotConfigured
 
-PROMPT_VERSION = "fda-msg-v1"
+PROMPT_VERSION = "reg-msg-v2"
 CLASSIFY_PROMPT_VERSION = "fda-classify-v1"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 SYSTEM_PROMPT = """You are a pharmaceutical communication assistant for Ikris Pharma Network.
 
-Use only the supplied structured FDA and scientific data.
-FDA regulatory information is authoritative. KEGG data, if present, is secondary and must not override FDA data.
+Use only the supplied structured regulatory and scientific data.
+The regulator is named in "regulator" (FDA = USA, EMA = European Union, PMDA = Japan). Its data in
+"regulatory_drug" is authoritative. KEGG data, if present, is secondary and must not override it.
+Name the correct regulator; never call an EMA or PMDA approval an FDA approval, and never claim an
+approval in any other country. "fda_status" holds the named regulator's own status wording.
 
 Do not invent:
-- FDA approvals
+- regulatory approvals
 - approval dates
 - indications
 - clinical trial results
@@ -38,7 +42,7 @@ Do not invent:
 
 Do not provide medical advice.
 Generate professional communication intended for healthcare professionals.
-Copy drug names, active ingredients, FDA status and approval dates exactly as supplied.
+Copy drug names, active ingredients, regulatory status and approval dates exactly as supplied.
 Do not add numbers, percentages or dates that are not in the supplied data.
 If required information is missing or contradictory, return NEEDS_REVIEW.
 Never fabricate information.
@@ -116,14 +120,16 @@ async def _chat(system: str, user: str, max_tokens: int = 1200) -> tuple[str, di
 
 def facts_payload(doctor: dict, drug: dict, kegg: dict | None, channel: str, objective: str | None,
                   template_text: str | None, sender: dict | None) -> dict[str, Any]:
+    reg = regulator_info(drug.get("regulator"))
     return {
         "doctor": {k: doctor.get(k) for k in ("doctor_name", "specialty", "institute", "department", "sub_department", "city")},
-        "fda_drug": {k: drug.get(k) for k in (
+        "regulator": {k: reg[k] for k in ("code", "short", "authority", "region")},
+        "regulatory_drug": {k: drug.get(k) for k in (
             "drug_name", "brand_name", "generic_name", "active_ingredient", "manufacturer", "dosage_form", "route",
             "indication", "therapeutic_area", "fda_status", "approval_date", "marketing_status", "application_number")},
         "kegg_reference": kegg or None,
         "channel": channel,
-        "message_objective": objective or "Share an FDA drug information update and offer help with availability or patient access.",
+        "message_objective": objective or reg["objective"],
         "approved_template": template_text or None,
         "sender": sender or {},
     }

@@ -60,9 +60,10 @@ export const api = {
   patch: async <T>(path: string, body: unknown): Promise<T> =>
     (await request(path, { method: "PATCH", body: JSON.stringify(body) })).json(),
   del: async <T>(path: string): Promise<T> => (await request(path, { method: "DELETE" })).json(),
-  upload: async <T>(path: string, file: File): Promise<T> => {
+  upload: async <T>(path: string, file: File, fields?: Record<string, string | number | undefined | null>): Promise<T> => {
     const form = new FormData();
     form.append("file", file);
+    Object.entries(fields ?? {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") form.append(k, String(v)); });
     return (await request(path, { method: "POST", body: form, headers: {} })).json();
   },
   download: async (path: string, params: Query, filename: string): Promise<void> => {

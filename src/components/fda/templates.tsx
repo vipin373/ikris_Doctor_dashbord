@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Dialog, EmptyState, Skeleton, Td, Th } from "@/components/ui/misc";
 import { api } from "@/lib/api";
+import { useRegulator } from "@/lib/regulator";
 import { AREA_LABEL, CHANNEL_LABEL, TEMPLATE_TYPES, type FdaConfig, type FdaDoctor, type FdaDrug, type MessageTemplate } from "@/lib/fda";
 import { cn, formatDateTime } from "@/lib/utils";
 import { AreaBadge } from "./drugs";
@@ -36,12 +37,13 @@ Regards,
 
 export function FdaTemplates({ config }: { config?: FdaConfig }) {
   const qc = useQueryClient();
+  const R = useRegulator();
   const [filter, setFilter] = React.useState("all");
   const [q, setQ] = React.useState("");
   const [editing, setEditing] = React.useState<Partial<MessageTemplate> | null>(null);
   const [previewing, setPreviewing] = React.useState<MessageTemplate | null>(null);
   const [history, setHistory] = React.useState<MessageTemplate | null>(null);
-  const { data, isLoading } = useQuery({ queryKey: ["fda-templates", "all"], queryFn: () => api.get<MessageTemplate[]>("/fda/templates") });
+  const { data, isLoading } = useQuery({ queryKey: ["fda-templates", R.code, "all"], queryFn: () => api.get<MessageTemplate[]>("/fda/templates", { regulator: R.code }) });
   const refresh = () => qc.invalidateQueries({ queryKey: ["fda-templates"] });
   const act = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "activate" | "deactivate" | "duplicate" | "delete" }) =>
@@ -60,7 +62,7 @@ export function FdaTemplates({ config }: { config?: FdaConfig }) {
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-        <Button size="sm" onClick={() => setEditing({ channel: "WHATSAPP", department: "GENERAL", template_type: "FDA_DRUG_UPDATE", language: "en", status: "DRAFT", body: EXAMPLE, whatsapp_variables: [], whatsapp_approval_status: "NOT_SUBMITTED" })}>
+        <Button size="sm" onClick={() => setEditing({ channel: "WHATSAPP", department: "GENERAL", template_type: R.templateType, language: "en", status: "DRAFT", body: EXAMPLE, whatsapp_variables: [], whatsapp_approval_status: "NOT_SUBMITTED" })}>
           <Plus className="h-3.5 w-3.5" /> Create New Template
         </Button>
         <div className="relative min-w-[180px] flex-1">
@@ -118,6 +120,7 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
 
 function TemplateEditor({ initial, config, onClose }: { initial: Partial<MessageTemplate>; config?: FdaConfig; onClose: (saved?: boolean) => void }) {
   const { me } = useAuth();
+  const R = useRegulator();
   const [t, setT] = React.useState<Partial<MessageTemplate>>(initial);
   const set = (patch: Partial<MessageTemplate>) => setT((x) => ({ ...x, ...patch }));
   const [focus, setFocus] = React.useState<"body" | "subject">("body");
@@ -128,7 +131,7 @@ function TemplateEditor({ initial, config, onClose }: { initial: Partial<Message
         name: t.name, department: t.department, channel: t.channel, template_type: t.template_type, language: t.language || "en",
         subject: t.channel === "WHATSAPP" ? null : t.subject || null, body: t.body, status: status ?? t.status ?? "DRAFT",
         whatsapp_template_name: t.whatsapp_template_name || null, whatsapp_template_id: t.whatsapp_template_id || null,
-        whatsapp_approval_status: t.whatsapp_approval_status ?? "NOT_SUBMITTED", whatsapp_variables: t.whatsapp_variables ?? [],
+        whatsapp_approval_status: t.whatsapp_approval_status ?? "NOT_SUBMITTED", whatsapp_variables: t.whatsapp_variables ?? [], regulator: R.code,
       };
       return t.id ? api.put(`/fda/templates/${t.id}`, body) : api.post("/fda/templates", body);
     },
@@ -153,7 +156,7 @@ function TemplateEditor({ initial, config, onClose }: { initial: Partial<Message
           <div><Label>Language</Label><Select value={t.language} onChange={(e) => set({ language: e.target.value })}><option value="en">English</option><option value="hi">Hindi</option><option value="en_US">English (US)</option></Select></div>
         </div>
         {t.channel !== "WHATSAPP" && (
-          <div><Label>Email subject</Label><Input id="tpl-subject" value={t.subject ?? ""} onFocus={() => setFocus("subject")} onChange={(e) => set({ subject: e.target.value })} placeholder="FDA Drug Information Update – {{drug_name}}" /></div>
+          <div><Label>Email subject</Label><Input id="tpl-subject" value={t.subject ?? ""} onFocus={() => setFocus("subject")} onChange={(e) => set({ subject: e.target.value })} placeholder={R.subjectExample} /></div>
         )}
         <div>
           <Label>Message</Label>
@@ -183,23 +186,24 @@ function TemplateEditor({ initial, config, onClose }: { initial: Partial<Message
 }
 
 function TemplatePreview({ t, onClose }: { t: MessageTemplate; onClose: () => void }) {
+  const R = useRegulator();
   const [doctorId, setDoctorId] = React.useState("");
   const [drugId, setDrugId] = React.useState("");
   const channel = t.channel === "BOTH" ? "EMAIL" : t.channel;
   const [ch, setCh] = React.useState<"WHATSAPP" | "EMAIL">(channel);
   const doctors = useQuery({ queryKey: ["fda-doctors", "", "all", 1, "preview"], queryFn: () => api.get<{ items: FdaDoctor[] }>("/fda/doctors", { page_size: 50 }) });
-  const drugs = useQuery({ queryKey: ["fda-drugs-preview"], queryFn: () => api.get<{ items: FdaDrug[] }>("/fda/drugs", { sendable: true, page_size: 50 }) });
+  const drugs = useQuery({ queryKey: ["fda-drugs-preview", R.code], queryFn: () => api.get<{ items: FdaDrug[] }>("/fda/drugs", { sendable: true, page_size: 50, regulator: R.code }) });
   const prev = useQuery({
     queryKey: ["tpl-preview", t.id, t.version, doctorId, drugId, ch],
     queryFn: () => api.post<{ subject: string | null; body: string; html?: string; missing: string[]; unknown: string[] }>("/fda/templates/preview", {
       subject: t.subject, body: t.body, channel: ch, doctor_id: doctorId || null, drug_id: drugId || null }),
   });
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} wide title={`Preview · ${t.name}`} description="Filled with a real doctor and FDA drug from the database. Unfilled variables stay visible.">
+    <Dialog open onOpenChange={(o) => !o && onClose()} wide title={`Preview · ${t.name}`} description={`Filled with a real doctor and ${R.short} drug from the database. Unfilled variables stay visible.`}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Doctor</Label><Select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}><option value="">(none)</option>{doctors.data?.items.map((d) => <option key={d.id} value={d.id}>{d.doctor_name}</option>)}</Select></div>
-          <div><Label>FDA drug</Label><Select value={drugId} onChange={(e) => setDrugId(e.target.value)}><option value="">(none)</option>{drugs.data?.items.map((d) => <option key={d.id} value={d.id}>{d.drug_name}</option>)}</Select></div>
+          <div><Label>{R.short} drug</Label><Select value={drugId} onChange={(e) => setDrugId(e.target.value)}><option value="">(none)</option>{drugs.data?.items.map((d) => <option key={d.id} value={d.id}>{d.drug_name}</option>)}</Select></div>
         </div>
         {t.channel === "BOTH" && <div className="flex gap-1 text-xs">{(["EMAIL", "WHATSAPP"] as const).map((c) => <button key={c} onClick={() => setCh(c)} className={cn("rounded-full border px-2.5 py-1", ch === c ? "border-brand-600 bg-brand-50" : "border-line")}>{CHANNEL_LABEL[c]}</button>)}</div>}
         {prev.data?.missing.length ? <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">No value yet for: {prev.data.missing.map((m) => `{{${m}}}`).join(", ")}</p> : null}

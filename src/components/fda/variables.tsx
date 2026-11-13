@@ -1,6 +1,7 @@
 "use client";
 
 import type { FdaConfig } from "@/lib/fda";
+import { useRegulator } from "@/lib/regulator";
 
 const FALLBACK = [
   "doctor_name", "hospital_name", "specialty", "department", "city", "drug_name", "brand_name", "active_ingredient", "drug_with_ingredient", "indication",
@@ -11,6 +12,7 @@ const FALLBACK = [
 export function VariableChips({ config, targetId, value, onChange }: {
   config?: FdaConfig; targetId: string; value: string; onChange: (v: string) => void;
 }) {
+  const R = useRegulator();
   const vars = config?.variables?.length ? config.variables : FALLBACK;
   const insert = (name: string) => {
     const tag = `{{${name}}}`;
@@ -33,7 +35,7 @@ export function VariableChips({ config, targetId, value, onChange }: {
     <div className="space-y-1.5 rounded-md bg-slate-50 px-3 py-2">
       {groups.map((g) => (
         <div key={g} className="flex flex-wrap items-center gap-1">
-          <span className="w-14 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">{g}</span>
+          <span className="w-14 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">{g === "FDA" ? `${R.short} drug` : g}</span>
           {vars.filter((v) => v.group === g).map((v) => (
             <button key={v.name} type="button" title={v.description} onClick={() => insert(v.name)}
               className="rounded border border-line bg-white px-1.5 py-0.5 font-mono text-[11px] text-brand-800 hover:border-brand-300 hover:bg-brand-50">
@@ -42,7 +44,7 @@ export function VariableChips({ config, targetId, value, onChange }: {
           ))}
         </div>
       ))}
-      <p className="text-[10px] text-ink-soft">FDA variables are filled only from the FDA database; a missing value blocks the message instead of being guessed.</p>
+      <p className="text-[10px] text-ink-soft">{R.short} drug variables are filled only from the stored {R.short} record; a missing value blocks the message instead of being guessed. {"{{fda_status}}"} and {"{{fda_approval_date}}"} hold this regulator&apos;s own status and date.</p>
     </div>
   );
 }

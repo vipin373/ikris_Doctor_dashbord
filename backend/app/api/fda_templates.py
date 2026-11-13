@@ -19,9 +19,9 @@ router = APIRouter(prefix="/api/fda/templates", tags=["fda-templates"])
 
 Dept = Literal["ONCOLOGY", "HEMATOLOGY", "RARE_DISEASE", "NPP", "GENERAL"]
 Channel = Literal["WHATSAPP", "EMAIL", "BOTH"]
-TType = Literal["FDA_DRUG_UPDATE", "NEW_DRUG", "PRODUCT_INFORMATION", "AVAILABILITY", "PATIENT_ACCESS",
+TType = Literal["FDA_DRUG_UPDATE", "EMA_DRUG_UPDATE", "PMDA_DRUG_UPDATE", "NEW_DRUG", "PRODUCT_INFORMATION", "AVAILABILITY", "PATIENT_ACCESS",
                 "DOCTOR_FOLLOW_UP", "GENERAL", "CUSTOM"]
-COLUMNS = ("id,name,department,channel,template_type,language,subject,body,status,version,whatsapp_template_name,"
+COLUMNS = ("id,regulator,name,department,channel,template_type,language,subject,body,status,version,whatsapp_template_name,"
            "whatsapp_template_id,whatsapp_approval_status,whatsapp_variables,created_by,updated_by,created_at,updated_at")
 
 
@@ -38,6 +38,7 @@ class TemplateIn(BaseModel):
     whatsapp_template_id: str | None = Field(None, max_length=200)
     whatsapp_approval_status: Literal["NOT_SUBMITTED", "PENDING", "APPROVED", "REJECTED"] = "NOT_SUBMITTED"
     whatsapp_variables: list[str] = Field(default_factory=list, max_length=20)
+    regulator: Literal["FDA", "EMA", "PMDA"] = "FDA"
 
     @field_validator("whatsapp_variables")
     @classmethod
@@ -60,8 +61,9 @@ def _check(t: TemplateIn) -> None:
 
 @router.get("")
 async def list_templates(status: str | None = None, channel: str | None = None, q: str | None = None,
+                         regulator: Literal["FDA", "EMA", "PMDA"] = "FDA",
                          user: CurrentUser = Depends(get_current_user)):
-    p = [("select", COLUMNS), ("deleted_at", "is.null"), ("order", "updated_at.desc")]
+    p = [("select", COLUMNS), ("deleted_at", "is.null"), ("order", "updated_at.desc"), ("regulator", f"eq.{regulator}")]
     if status in ("DRAFT", "ACTIVE", "INACTIVE"):
         p.append(("status", f"eq.{status}"))
     if channel in ("WHATSAPP", "EMAIL"):
@@ -85,7 +87,7 @@ async def create_template(body: TemplateIn, request: Request, user: CurrentUser 
     _check(body)
     row = (await user.db().insert("message_templates", {**body.model_dump(), "created_by": user.id, "updated_by": user.id},
                                   returning=COLUMNS))[0]
-    await audit("FDA template created", user, "message_templates", row["id"], {"name": body.name}, request)
+    await audit("Template created", user, "message_templates", row["id"], {"name": body.name}, request)
     return row
 
 
@@ -96,7 +98,7 @@ async def update_template(template_id: str, body: TemplateIn, request: Request, 
                                   {**body.model_dump(), "updated_by": user.id}, returning=COLUMNS)
     if not rows:
         raise HTTPException(404, "Template not found or you cannot edit it")
-    await audit("FDA template edited", user, "message_templates", template_id, {"version": rows[0]["version"]}, request)
+    await audit("Template edited", user, "message_templates", template_id, {"version": rows[0]["version"]}, request)
     return rows[0]
 
 
@@ -105,7 +107,7 @@ async def _set_status(template_id: str, status: str, user: CurrentUser, request:
                                   {"status": status, "updated_by": user.id}, returning=COLUMNS)
     if not rows:
         raise HTTPException(404, "Template not found or you cannot edit it")
-    await audit(f"FDA template {status.lower()}", user, "message_templates", template_id, None, request)
+    await audit(f"Template {status.lower()}", user, "message_templates", template_id, None, request)
     return rows[0]
 
 
@@ -122,12 +124,12 @@ async def deactivate(template_id: str, request: Request, user: CurrentUser = Dep
 @router.post("/{template_id}/duplicate")
 async def duplicate(template_id: str, request: Request, user: CurrentUser = Depends(get_current_user)):
     t = await get_template(template_id, user)
-    copy = {k: t[k] for k in ("department", "channel", "template_type", "language", "subject", "body",
+    copy = {k: t[k] for k in ("regulator", "department", "channel", "template_type", "language", "subject", "body",
                               "whatsapp_template_name", "whatsapp_template_id", "whatsapp_variables")}
     copy.update({"name": f"{t['name']} (copy)"[:160], "status": "DRAFT", "whatsapp_approval_status": "NOT_SUBMITTED",
                  "created_by": user.id, "updated_by": user.id})
     row = (await user.db().insert("message_templates", copy, returning=COLUMNS))[0]
-    await audit("FDA template duplicated", user, "message_templates", row["id"], {"from": template_id}, request)
+    await audit("Template duplicated", user, "message_templates", row["id"], {"from": template_id}, request)
     return row
 
 
@@ -138,7 +140,7 @@ async def delete_template(template_id: str, request: Request, user: CurrentUser 
                                   {"deleted_at": datetime.now(timezone.utc).isoformat(), "status": "INACTIVE", "updated_by": user.id}, returning="id")
     if not rows:
         raise HTTPException(404, "Template not found or you cannot delete it")
-    await audit("FDA template deleted", user, "message_templates", template_id, None, request)
+    await audit("Template deleted", user, "message_templates", template_id, None, request)
     return {"ok": True}
 
 

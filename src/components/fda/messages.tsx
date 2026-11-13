@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
 import { Dialog, EmptyState, ErrorState, Pagination, Skeleton, StatCard, Td, Th } from "@/components/ui/misc";
 import { api } from "@/lib/api";
+import { useRegulator } from "@/lib/regulator";
 import { MESSAGE_STATUS_TONE } from "@/lib/fda";
 import { formatDateTime, number } from "@/lib/utils";
 
@@ -18,16 +19,17 @@ interface Log {
 }
 
 export function SentMessages() {
+  const R = useRegulator();
   const [status, setStatus] = React.useState("");
   const [channel, setChannel] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [open, setOpen] = React.useState<Log | null>(null);
   const logs = useQuery({
-    queryKey: ["fda-messages", status, channel, page],
-    queryFn: () => api.get<{ items: Log[]; total: number }>("/messages", { status, channel, page, page_size: 25 }),
+    queryKey: ["fda-messages", R.code, status, channel, page],
+    queryFn: () => api.get<{ items: Log[]; total: number }>("/messages", { status, channel, page, page_size: 25, regulator: R.code }),
     refetchInterval: 30000,
   });
-  const stats = useQuery({ queryKey: ["fda-analytics"], queryFn: () => api.get<{ total: number; by_channel: Record<string, Record<string, number>> }>("/analytics", { days: 30 }) });
+  const stats = useQuery({ queryKey: ["fda-analytics", R.code], queryFn: () => api.get<{ total: number; by_channel: Record<string, Record<string, number>> }>("/analytics", { days: 30, regulator: R.code }) });
   const wa = stats.data?.by_channel.WHATSAPP ?? {};
   const em = stats.data?.by_channel.EMAIL ?? {};
   const sum = (o: Record<string, number>, ks: string[]) => ks.reduce((n, k) => n + (o[k] ?? 0), 0);
@@ -54,7 +56,7 @@ export function SentMessages() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr><Th>Doctor</Th><Th>FDA drug</Th><Th>Channel</Th><Th>Status</Th><Th>Sent</Th><Th>Provider ID</Th></tr></thead>
+                <thead><tr><Th>Doctor</Th><Th>{R.short} drug</Th><Th>Channel</Th><Th>Status</Th><Th>Sent</Th><Th>Provider ID</Th></tr></thead>
                 <tbody>
                   {logs.data.items.map((l) => (
                     <tr key={l.id} onClick={() => setOpen(l)} className="cursor-pointer hover:bg-slate-50/70">

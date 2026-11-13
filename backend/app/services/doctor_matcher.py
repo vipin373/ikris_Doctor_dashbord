@@ -15,7 +15,7 @@ DRUG_COLUMNS = (
     "id,application_number,drug_name,brand_name,generic_name,active_ingredient,manufacturer,dosage_form,strength,route,"
     "indication,therapeutic_area,therapeutic_areas,department,classification_status,fda_status,approval_date,"
     "latest_action_date,marketing_status,fda_source,fda_source_url,drugs_at_fda_url,label_url,last_synced_at,"
-    "retrieved_at,review_flags,india_status,india_evidence"
+    "retrieved_at,review_flags,india_status,india_evidence,regulator,orphan,application_type"
 )
 
 
@@ -60,7 +60,7 @@ def drug_sendable(drug: dict[str, Any]) -> str | None:
     if drug.get("classification_status") not in SENDABLE_CLASSIFICATION:
         return "Drug classification requires review."
     if not drug.get("fda_status"):
-        return "FDA approval status is not available for this drug."
+        return f"{drug.get('regulator') or 'FDA'} approval status is not available for this drug."
     if drug.get("india_status") not in NOT_IN_INDIA:
         return ("This drug is approved in India (CDSCO), so it is not offered."
                 if drug.get("india_status") in ("APPROVED", "MANUAL_APPROVED")
@@ -72,7 +72,7 @@ def drug_relevant(drug: dict[str, Any], areas: list[str]) -> bool:
     return bool(set(drug.get("therapeutic_areas") or []) & set(areas))
 
 
-async def recommend(db, doctor: dict[str, Any], limit: int = 12, q: str | None = None) -> dict[str, Any]:
+async def recommend(db, doctor: dict[str, Any], limit: int = 12, q: str | None = None, regulator: str = "FDA") -> dict[str, Any]:
     areas = doctor_areas(doctor)
     if not areas:
         return {"areas": [], "areas_label": areas_label([]), "items": [],
@@ -80,6 +80,7 @@ async def recommend(db, doctor: dict[str, Any], limit: int = 12, q: str | None =
                         "so no drug is matched automatically."}
     params: list[tuple[str, str]] = [
         ("select", DRUG_COLUMNS),
+        ("regulator", f"eq.{regulator}"),
         ("therapeutic_areas", "ov.{" + ",".join(areas) + "}"),
         ("classification_status", f"in.({','.join(SENDABLE_CLASSIFICATION)})"),
         ("fda_status", "not.is.null"),

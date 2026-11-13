@@ -85,14 +85,19 @@ async def create_campaign(db, user: CurrentUser, body: dict[str, Any]) -> dict[s
         if template["channel"] != "BOTH" and body["channel"] not in (template["channel"],):
             raise HTTPException(400, f"This template is for {template['channel'].title()} only.")
 
+    regulator = body.get("regulator") or "FDA"
+    if template and (template.get("regulator") or "FDA") != regulator:
+        raise HTTPException(400, f"This template belongs to {template.get('regulator')}; choose a {regulator} template.")
     manual_drug = None
     if body.get("drug_mode") == "MANUAL" or body.get("drug_id"):
         if not body.get("drug_id"):
-            raise HTTPException(400, "Choose an FDA drug.")
+            raise HTTPException(400, f"Choose a {regulator} drug.")
         rows, _ = await db.select("fda_drugs", {"id": f"eq.{body['drug_id']}", "select": DRUG_COLUMNS})
         if not rows:
-            raise HTTPException(404, "FDA drug not found.")
+            raise HTTPException(404, f"{regulator} drug not found.")
         manual_drug = rows[0]
+        if (manual_drug.get("regulator") or "FDA") != regulator:
+            raise HTTPException(400, f"This drug is a {manual_drug.get('regulator')} record; choose a {regulator} drug.")
         reason = drug_sendable(manual_drug)
         if reason:
             raise HTTPException(400, reason)
@@ -101,7 +106,8 @@ async def create_campaign(db, user: CurrentUser, body: dict[str, Any]) -> dict[s
     sent_map: dict[tuple[str, str], str] = {}
     if not manual_drug:
         candidates, _ = await db.select("fda_drugs", [
-            ("select", LIGHT_DRUG_COLUMNS), ("classification_status", f"in.({','.join(SENDABLE_CLASSIFICATION)})"),
+            ("select", LIGHT_DRUG_COLUMNS), ("regulator", f"eq.{regulator}"),
+            ("classification_status", f"in.({','.join(SENDABLE_CLASSIFICATION)})"),
             ("fda_status", "not.is.null"), ("india_status", f"in.({','.join(NOT_IN_INDIA)})"),
             ("order", "latest_action_date.desc.nullslast,drug_name.asc"), ("limit", "3000"),
         ])
@@ -114,7 +120,7 @@ async def create_campaign(db, user: CurrentUser, body: dict[str, Any]) -> dict[s
         "name": body["name"], "mode": body["mode"], "objective": body.get("objective"), "channel": body["channel"],
         "message_method": body["message_method"], "drug_mode": "MANUAL" if manual_drug else "AUTO",
         "drug_id": manual_drug["id"] if manual_drug else None, "template_id": template["id"] if template else None,
-        "status": "DRAFT", "owner_role": user.role, "created_by": user.id,
+        "status": "DRAFT", "owner_role": user.role, "created_by": user.id, "regulator": regulator,
     }, returning="*"))[0]
 
     used: dict[str, int] = {}
@@ -145,7 +151,7 @@ async def create_campaign(db, user: CurrentUser, body: dict[str, Any]) -> dict[s
                         pool.append({**c, "last_sent_to_doctor": sent_map.get((d["id"], c["id"]))})
                 pick = pick_auto_drug(pool, used)
                 if not pick:
-                    status, skip = "SKIPPED", f"No reviewed FDA drug for {areas_label(areas)} yet."
+                    status, skip = "SKIPPED", f"No reviewed {regulator} drug for {areas_label(areas)} yet."
                 else:
                     drug_id = pick["id"]
                     used[drug_id] = used.get(drug_id, 0) + 1
@@ -210,7 +216,7 @@ async def _build(db, user: CurrentUser, campaign: dict, cd: dict, doctor: dict, 
                                             "WhatsApp message (delivered only within 24 hours of the doctor's last message)."))
     else:  # AI
         if not drug:
-            issues.append(issue("block", "AI drafting needs an FDA drug."))
+            issues.append(issue("block", f"AI drafting needs a {campaign.get('regulator') or 'FDA'} drug."))
         else:
             kegg_rows, _ = await db.select("kegg_drugs", {"drug_id": f"eq.{drug['id']}", "select": "kegg_id,indication,therapeutic_area,conflict"})
             kegg = kegg_rows[0] if kegg_rows else None
@@ -235,10 +241,10 @@ async def _build(db, user: CurrentUser, campaign: dict, cd: dict, doctor: dict, 
                     body = plain_to_html(body)
                 if result.status == "NEEDS_REVIEW":
                     issues.append(issue("block", "AI flagged this for review: " + (result.reason or "missing or contradictory data")))
-                odd = fact_guard((subject or "") + " " + body, [str(v) for v in payload["fda_drug"].values() if v]
+                odd = fact_guard((subject or "") + " " + body, [str(v) for v in payload["regulatory_drug"].values() if v]
                                  + [str(v) for v in (sender or {}).values() if v] + [str(v) for v in payload["doctor"].values() if v])
                 if odd:
-                    issues.append(issue("block", "Contains figures not found in the FDA data: " + ", ".join(odd[:6])
+                    issues.append(issue("block", f"Contains figures not found in the {payload['regulator']['short']} data: " + ", ".join(odd[:6])
                                                  + ". Edit them out or regenerate."))
                 left = unresolved(body + (subject or ""))
                 if left:
@@ -252,7 +258,7 @@ async def _build(db, user: CurrentUser, campaign: dict, cd: dict, doctor: dict, 
         issues.append(issue("warn", "Free-form WhatsApp is delivered only within 24 hours of the doctor's last message."))
     if drug and drug.get("review_flags"):
         for f in drug["review_flags"][:2]:
-            issues.append(issue("warn", f"FDA data note: {f}"))
+            issues.append(issue("warn", f"{drug.get('regulator') or 'FDA'} data note: {f}"))
 
     return {
         "campaign_id": campaign["id"], "campaign_doctor_id": cd["id"], "doctor_id": doctor["id"],
@@ -348,7 +354,7 @@ async def send_one(db, user: CurrentUser, message_id: str) -> dict[str, Any]:
         dr, _ = await db.select("fda_drugs", {"id": f"eq.{m['drug_id']}", "select": DRUG_COLUMNS})
         drug = dr[0] if dr else None
         if not drug or drug_sendable(drug):
-            return await _fail_before_send(db, m, (drug and drug_sendable(drug)) or "FDA drug no longer available.")
+            return await _fail_before_send(db, m, (drug and drug_sendable(drug)) or "The drug record is no longer available.")
     since = datetime.fromisoformat(str(campaign["created_at"]).replace("Z", "+00:00"))
     ok, until = eligibility(doctor, since=since)
     if not ok:

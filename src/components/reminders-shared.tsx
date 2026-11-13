@@ -28,7 +28,7 @@ export function daysAgo(today: string, iso: string | null): number | null {
   return Math.round((new Date(`${today}T00:00:00+05:30`).getTime() - new Date(`${iso.slice(0, 10)}T00:00:00+05:30`).getTime()) / 86400000);
 }
 
-export function MoleculeList({ items, today }: { items: NewMolecule[]; today: string }) {
+export function MoleculeList({ items, today, regulator = "FDA" }: { items: NewMolecule[]; today: string; regulator?: string }) {
   return (
     <ul className="divide-y divide-line">
       {items.map((m) => {
@@ -41,7 +41,7 @@ export function MoleculeList({ items, today }: { items: NewMolecule[]; today: st
               <p className="text-[11px] text-ink-soft">{m.manufacturer} · {m.application_number}</p>
             </div>
             <div className="flex gap-1">{(m.therapeutic_areas.length ? m.therapeutic_areas : [m.department ?? "NEEDS_REVIEW"]).map((a) => <Badge key={a} tone={AREA_TONE[a] ?? "neutral"}>{AREA_LABEL[a] ?? a}</Badge>)}</div>
-            <span className="w-32 text-right text-xs text-ink-muted">FDA approved {fdaDate(m.approval_date)}</span>
+            <span className="w-32 text-right text-xs text-ink-muted">{regulator} approved {fdaDate(m.approval_date)}</span>
           </li>
         );
       })}

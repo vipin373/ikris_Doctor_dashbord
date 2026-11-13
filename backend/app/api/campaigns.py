@@ -31,6 +31,7 @@ class CampaignIn(BaseModel):
     template_id: str | None = None
     doctor_ids: list[str] = Field(min_length=1, max_length=5000)
     upload_rows: dict[str, dict] | None = None
+    regulator: Literal["FDA", "EMA", "PMDA"] = "FDA"
 
 
 @router.post("/api/campaigns")
@@ -49,8 +50,12 @@ async def create_campaign(body: CampaignIn, request: Request, user: CurrentUser 
 
 
 @router.get("/api/campaigns")
-async def list_campaigns(user: CurrentUser = Depends(get_current_user), limit: int = Query(30, ge=1, le=100)):
-    rows, _ = await user.db().select("campaigns", [("select", "*"), ("order", "created_at.desc"), ("limit", str(limit))])
+async def list_campaigns(user: CurrentUser = Depends(get_current_user), limit: int = Query(30, ge=1, le=100),
+                         regulator: Literal["FDA", "EMA", "PMDA"] | None = None):
+    p = [("select", "*"), ("order", "created_at.desc"), ("limit", str(limit))]
+    if regulator:
+        p.append(("regulator", f"eq.{regulator}"))
+    rows, _ = await user.db().select("campaigns", p)
     return rows
 
 
@@ -259,9 +264,15 @@ async def ai_generate(body: AIGenerateIn, request: Request, user: CurrentUser = 
 
 
 # ------------------------------------------------------------------ logs & analytics
+async def _regulator_filter(db, regulator: str | None) -> tuple[str, str] | None:
+    """message_logs.regulator is copied from the campaign by a trigger (logs without a campaign are FDA)."""
+    return ("regulator", f"eq.{regulator}") if regulator else None
+
+
 @router.get("/api/messages")
 async def message_logs(
     status: str | None = None, channel: str | None = None, doctor_id: str | None = None,
+    regulator: Literal["FDA", "EMA", "PMDA"] | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
     user: CurrentUser = Depends(get_current_user),
 ):
@@ -275,14 +286,22 @@ async def message_logs(
         p.append(("channel", f"eq.{channel}"))
     if doctor_id:
         p.append(("doctor_id", f"eq.{doctor_id}"))
+    rf = await _regulator_filter(user.db(), regulator)
+    if rf:
+        p.append(rf)
     rows, total = await user.db().select("message_logs", p, count=True, offset=(page - 1) * page_size, limit=page_size)
     return {"items": rows, "total": total or 0, "page": page, "page_size": page_size}
 
 
 @router.get("/api/analytics")
-async def analytics(days: int = Query(30, ge=1, le=365), user: CurrentUser = Depends(get_current_user)):
+async def analytics(days: int = Query(30, ge=1, le=365), regulator: Literal["FDA", "EMA", "PMDA"] | None = None,
+                    user: CurrentUser = Depends(get_current_user)):
     since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    logs = await user.db().select_all("message_logs", [("created_at", f"gte.{since}"), ("select", "channel,status")])
+    p = [("created_at", f"gte.{since}"), ("select", "channel,status")]
+    rf = await _regulator_filter(user.db(), regulator)
+    if rf:
+        p.append(rf)
+    logs = await user.db().select_all("message_logs", p)
     out: dict[str, dict[str, int]] = {"WHATSAPP": {}, "EMAIL": {}}
     for lg in logs:
         out[lg["channel"]][lg["status"]] = out[lg["channel"]].get(lg["status"], 0) + 1

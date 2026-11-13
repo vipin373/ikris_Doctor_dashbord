@@ -13,6 +13,7 @@ from datetime import date
 from typing import Any
 
 from .drug_classifier import AREA_LABEL
+from .regulators import info as regulator_info
 
 VARIABLES: list[tuple[str, str, str]] = [
     # (name, group, description)
@@ -28,8 +29,11 @@ VARIABLES: list[tuple[str, str, str]] = [
     ("indication", "FDA", "Indication, short (first part of the FDA label indication)"),
     ("indication_full", "FDA", "Indication, full FDA label text (long; best for email)"),
     ("therapeutic_area", "FDA", "Therapeutic area"),
-    ("fda_status", "FDA", "FDA status"),
-    ("fda_approval_date", "FDA", "FDA approval date"),
+    ("fda_status", "FDA", "Regulatory status (FDA / EMA / PMDA, as stored for the drug)"),
+    ("fda_approval_date", "FDA", "Approval date (FDA / EMA / PMDA, as stored for the drug)"),
+    ("regulator", "FDA", "Regulator short name: FDA, EMA or PMDA"),
+    ("regulator_name", "FDA", "Regulator full name, e.g. European Medicines Agency"),
+    ("approval_region", "FDA", "Where it is approved: USA, European Union or Japan"),
     ("manufacturer", "FDA", "Manufacturer / applicant (FDA)"),
     ("sender_name", "Sender", "Sender name"),
     ("sender_phone", "Sender", "Sender phone"),
@@ -107,6 +111,9 @@ def context_for(doctor: dict | None, drug: dict | None, sender: dict | None) -> 
         "therapeutic_area": area,
         "fda_status": drug.get("fda_status"),
         "fda_approval_date": _fmt_date(drug.get("approval_date")),
+        "regulator": regulator_info(drug.get("regulator"))["short"] if drug else None,
+        "regulator_name": regulator_info(drug.get("regulator"))["authority"].split(" (")[0] if drug else None,
+        "approval_region": regulator_info(drug.get("regulator"))["region"] if drug else None,
         "manufacturer": drug.get("manufacturer"),
         "sender_name": sender.get("name") or None,
         "sender_phone": sender.get("phone") or None,
@@ -161,16 +168,18 @@ def email_document(body_html: str, drug: dict | None, sender: dict | None) -> st
     sender = sender or {}
     source = ""
     if drug:
+        reg = regulator_info(drug.get("regulator"))
         links = []
         if drug.get("drugs_at_fda_url"):
-            links.append(f'<a href="{html.escape(drug["drugs_at_fda_url"])}" style="color:#172A5C">Drugs@FDA</a>')
-        if drug.get("label_url"):
-            links.append(f'<a href="{html.escape(drug["label_url"])}" style="color:#172A5C">FDA label</a>')
+            links.append(f'<a href="{html.escape(drug["drugs_at_fda_url"])}" style="color:#172A5C">{html.escape(reg["record_link"])}</a>')
+        if drug.get("label_url") and drug.get("label_url") != drug.get("drugs_at_fda_url"):
+            links.append(f'<a href="{html.escape(drug["label_url"])}" style="color:#172A5C">{html.escape(reg["label_link"])}</a>')
         retrieved = _fmt_date(drug.get("last_synced_at") or drug.get("retrieved_at"))
         source = (
-            '<p style="margin:16px 0 0;font-size:11px;color:#6b7280">Source: U.S. Food and Drug Administration'
+            '<p style="margin:16px 0 0;font-size:11px;color:#6b7280">Source: ' + html.escape(reg["authority"].split(" (")[0])
             + (f" ({' · '.join(links)})" if links else "")
             + (f", retrieved {retrieved}" if retrieved else "")
+            + ("; table extracted and edited by Ikris" if drug.get("regulator") == "PMDA" else "")
             + ". This information is intended for healthcare professionals.</p>"
         )
     contact = " · ".join(html.escape(x) for x in (sender.get("phone"), sender.get("email")) if x)

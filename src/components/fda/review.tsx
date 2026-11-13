@@ -10,6 +10,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Dialog, ErrorState, Skeleton, Td, Th } from "@/components/ui/misc";
 import { api } from "@/lib/api";
+import { useRegulator } from "@/lib/regulator";
 import { CHANNEL_LABEL, MESSAGE_STATUS_TONE, type CampaignDetail, type GeneratedMessage } from "@/lib/fda";
 import { cn, formatDateTime } from "@/lib/utils";
 
@@ -46,7 +47,7 @@ export async function generateAll(id: string, onProgress: (done: number, pending
 export function providerHint(error?: string | null): string | null {
   if (!error) return null;
   if (/message window|24|re-?engagement|outside/i.test(error)) {
-    return "WhatsApp only allows free-text messages within 24 hours of the doctor's last message. Use a template approved in Cunnekt (FDA → Templates → Cunnekt template name, status Approved) to reach doctors any time.";
+    return "WhatsApp only allows free-text messages within 24 hours of the doctor's last message. Use a template approved in Cunnekt (Templates tab → Cunnekt template name, status Approved) to reach doctors any time.";
   }
   if (/template/i.test(error)) return "Check that the Cunnekt template name, language and number of variables match the template approved in Cunnekt.";
   return null;
@@ -63,6 +64,7 @@ export function deliveryLabel(m: GeneratedMessage): { text: string; tone: "green
 }
 
 export function CampaignReview({ id, single }: { id: string; single?: boolean }) {
+  const R = useRegulator();
   const qc = useQueryClient();
   const { data, isLoading, error, refetch } = useCampaign(id);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -159,7 +161,7 @@ export function CampaignReview({ id, single }: { id: string; single?: boolean })
               <tr>
                 <Th className="w-8"><input type="checkbox" aria-label="Select all" checked={approvable.length > 0 && approvable.every((x) => selected.has(x))}
                   onChange={(e) => setSelected(e.target.checked ? new Set(approvable) : new Set())} /></Th>
-                <Th>Doctor</Th><Th>Department</Th><Th>FDA drug</Th><Th>Channel</Th><Th>Status</Th><Th>Approval</Th><Th className="text-right">Actions</Th>
+                <Th>Doctor</Th><Th>Department</Th><Th>{R.short} drug</Th><Th>Channel</Th><Th>Status</Th><Th>Approval</Th><Th className="text-right">Actions</Th>
               </tr>
             </thead>
             <tbody>
@@ -284,6 +286,7 @@ function MessageDialog({ m, campaignId, doctorName, drugName, onClose, onApprove
   onApprove: (id: string, action: "APPROVE" | "REJECT") => void;
 }) {
   const qc = useQueryClient();
+  const R = useRegulator();
   const [editing, setEditing] = React.useState(false);
   const [subject, setSubject] = React.useState(m.subject ?? "");
   const [body, setBody] = React.useState(m.body);
@@ -302,7 +305,7 @@ function MessageDialog({ m, campaignId, doctorName, drugName, onClose, onApprove
   const sent = m.status === "SENT";
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} wide title={`${doctorName ?? "Doctor"} · ${CHANNEL_LABEL[m.channel]}`}
-      description={`${drugName ? `FDA drug: ${drugName} · ` : ""}${m.method === "AI" ? "AI draft" : m.method === "TEMPLATE" ? `Template v${m.template_version ?? "?"}` : "Written manually"} · ${STATUS_LABEL[m.status] ?? m.status}`}
+      description={`${drugName ? `${R.short} drug: ${drugName} · ` : ""}${m.method === "AI" ? "AI draft" : m.method === "TEMPLATE" ? `Template v${m.template_version ?? "?"}` : "Written manually"} · ${STATUS_LABEL[m.status] ?? m.status}`}
       footer={sent ? <Button variant="outline" onClick={onClose}>Close</Button> : (
         <>
           {editing ? (
@@ -326,7 +329,7 @@ function MessageDialog({ m, campaignId, doctorName, drugName, onClose, onApprove
             <div>
               <Label>{m.channel === "EMAIL" ? "Body (HTML or plain text)" : "Message"}</Label>
               <Textarea rows={14} value={body} onChange={(e) => setBody(e.target.value)} className={m.channel === "EMAIL" ? "font-mono text-[12px]" : ""} />
-              <p className="mt-1 text-[11px] text-ink-soft">Do not add FDA facts that are not in the FDA record. Editing clears the approval.</p>
+              <p className="mt-1 text-[11px] text-ink-soft">Do not add {R.short} facts that are not in the {R.short} record. Editing clears the approval.</p>
             </div>
           </>
         ) : <MessageBody m={m} />}
