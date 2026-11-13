@@ -43,6 +43,10 @@ async def dashboard_summary(user: CurrentUser = Depends(get_current_user)):
         data.update(await db.rpc("dashboard_summary_locations"))
     except SupabaseError:
         data["top_states"] = []
+    try:
+        data["outreach"] = await db.rpc("dashboard_outreach")
+    except SupabaseError:
+        data["outreach"] = None
     data["role"] = user.role
     return data
 

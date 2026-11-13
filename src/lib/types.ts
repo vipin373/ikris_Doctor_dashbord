@@ -124,6 +124,7 @@ export interface DashboardSummary {
   whatsapp_sent: number;
   replies: number;
   auto_replies?: number;
+  outreach?: import("@/components/dashboard/outreach-summary").OutreachData | null;
   replied_doctors?: number;
   email_replies?: number;
   email_auto_replies?: number;

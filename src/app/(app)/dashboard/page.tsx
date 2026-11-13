@@ -7,7 +7,8 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { AlertTriangle, ArrowRight, Bell, Cake, Dna, HeartPulse, Mail, MessageCircle, MessageSquareHeart, Send, Stethoscope, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCountUp } from "@/lib/motion";
-import { CategoryCards } from "@/components/npp/shared";
+import { CATEGORY_META, CategoryCards, catKey } from "@/components/npp/shared";
+import { OutreachSummary } from "@/components/dashboard/outreach-summary";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -168,36 +169,30 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
-          <div className={cn("stagger grid grid-cols-2 gap-4",
-            me?.departments.includes("NPP") && me?.departments.includes("RARE_DISEASES") ? "lg:grid-cols-3" : "lg:grid-cols-4")}>
-            <StatCard label="Total doctors" value={number(data.total_doctors)} icon={Users}
-              hint={`${number(data.with_email)} with valid email · ${number(data.with_phone)} with phone`} />
-            {me?.departments.includes("NPP") && (
-              <StatCard label="NPP doctors" value={number(data.by_department.NPP)} icon={HeartPulse} tone="sky"
-                hint={`Oncology ${number(sub("Oncology"))} · Hematology ${number(sub("Hematology"))}`} />
-            )}
-            {me?.departments.includes("RARE_DISEASES") && (
-              <StatCard label="Rare Disease doctors" value={number(data.by_department.RARE_DISEASES)} icon={Dna} tone="violet"
-                hint={data.by_sub_department.filter((s) => s.department === "RARE_DISEASES").map((s) => `${s.name} ${s.count}`).join(" · ")} />
-            )}
-            <StatCard label="Emails sent" value={number(data.emails_sent)} icon={Send} tone="green"
-              hint={`${number(data.contacted_doctors)} doctors contacted · ${number(data.emails_failed)} failed`} />
-            <StatCard label="WhatsApp messages" value={number(data.whatsapp_sent)} icon={MessageCircle} tone="amber" hint="From the sheets and the FDA module" />
-            <Link href="/doctors?reply=email" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
-              <StatCard label="Email replies" value={number(data.email_replies ?? 0)} icon={Mail} tone="green"
-                hint={<>{number(data.email_replied_doctors ?? 0)} doctors replied · {number(data.email_auto_replies ?? 0)} auto-replies →</>} />
-            </Link>
-            <Link href="/doctors?reply=whatsapp" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
-              <StatCard label="WhatsApp replies" value={number(data.whatsapp_replies ?? 0)} icon={MessageCircle} tone="amber"
-                hint={<>{number(data.whatsapp_replied_doctors ?? 0)} doctors replied · {number(data.whatsapp_auto_replies ?? 0)} auto-replies →</>} />
-            </Link>
-            <StatCard label="Patient feedback requests" value={number(data.feedback_total)} icon={MessageSquareHeart} tone="sky"
-              hint={feedback.map((f) => `${f.name} ${f.value}`).join(" · ")} />
-            <Link href="/calendar" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
-              <StatCard label="Upcoming birthdays (30 days)" value={number(data.upcoming_birthdays)} icon={Cake} tone="violet"
-                hint={data.upcoming_birthdays ? "Open the calendar →" : "Add birthdays: see Calendar & Birthdays →"} />
-            </Link>
+          <div>
+            <h2 className="mb-2.5 text-base font-bold text-walnut-800">Doctors</h2>
+            <div className={cn("stagger grid grid-cols-2 gap-4",
+              me?.departments.includes("NPP") && me?.departments.includes("RARE_DISEASES") ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
+              <StatCard label="Total doctors" value={number(data.total_doctors)} icon={Users}
+                hint={`${number(data.with_email)} have a working email address · ${number(data.with_phone)} have a phone number`} />
+              {me?.departments.includes("NPP") && (
+                <StatCard label="NPP doctors" value={number(data.by_department.NPP)} icon={HeartPulse} tone="sky"
+                  hint={`Oncology ${number(sub("Oncology"))} · Hematology ${number(sub("Hematology"))}`} />
+              )}
+              {me?.departments.includes("RARE_DISEASES") && (
+                <StatCard label="Rare Disease doctors" value={number(data.by_department.RARE_DISEASES)} icon={Dna} tone="violet"
+                  hint={data.by_sub_department.filter((s) => s.department === "RARE_DISEASES").slice(0, 4).map((s) => `${s.name} ${s.count}`).join(" · ")} />
+              )}
+              <StatCard label="Patient feedback requests" value={number(data.feedback_total)} icon={MessageSquareHeart} tone="sky"
+                hint={feedback.map((f) => `${f.name} ${f.value}`).join(" · ")} />
+              <Link href="/calendar" className="block rounded-card focus-visible:ring-2 focus-visible:ring-glow-400">
+                <StatCard label="Birthdays in the next 30 days" value={number(data.upcoming_birthdays)} icon={Cake} tone="violet"
+                  hint={data.upcoming_birthdays ? "Open the calendar →" : "Add birthdays: see Calendar & Birthdays →"} />
+              </Link>
+            </div>
           </div>
+
+          {data.outreach && <OutreachSummary data={data.outreach} />}
 
           {me?.departments.includes("NPP") && (
             <section className="mt-6">
@@ -260,10 +255,12 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={categoriesSet ? data.by_category.map((c) => ({ name: c.category === "Not set" ? c.category : `Category ${c.category}`, value: c.count })) : feedback}
+                      data={categoriesSet ? data.by_category.map((c) => ({ name: c.category === "Not set" ? "Unassigned" : `Category ${c.category}`, value: c.count })) : feedback}
                       dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} cornerRadius={6} stroke="#fff" strokeWidth={2} animationDuration={900}
                     >
-                      {(categoriesSet ? data.by_category : feedback).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      {categoriesSet
+                        ? data.by_category.map((c, i) => <Cell key={i} fill={CATEGORY_META[catKey(c.category)].bar} />)
+                        : feedback.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Tooltip {...TOOLTIP} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
