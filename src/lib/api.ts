@@ -57,6 +57,8 @@ export const api = {
     (await request(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) })).json(),
   put: async <T>(path: string, body: unknown): Promise<T> =>
     (await request(path, { method: "PUT", body: JSON.stringify(body) })).json(),
+  patch: async <T>(path: string, body: unknown): Promise<T> =>
+    (await request(path, { method: "PATCH", body: JSON.stringify(body) })).json(),
   del: async <T>(path: string): Promise<T> => (await request(path, { method: "DELETE" })).json(),
   upload: async <T>(path: string, file: File): Promise<T> => {
     const form = new FormData();

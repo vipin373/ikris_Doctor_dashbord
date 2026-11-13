@@ -10,6 +10,8 @@ import { EmptyState, PageHeader, Skeleton } from "@/components/ui/misc";
 import { api } from "@/lib/api";
 import type { Department, Facets } from "@/lib/types";
 import { cn, DEPARTMENT_LABEL, slugify } from "@/lib/utils";
+import { CategoryCards } from "@/components/npp/shared";
+import { BarChart3, Inbox, LayoutGrid, Send, Users } from "lucide-react";
 
 const BASE: Record<Department, string> = { NPP: "/npp", RARE_DISEASES: "/rare-diseases" };
 
@@ -60,6 +62,29 @@ export function DepartmentView({ department, subSlug }: { department: Department
           </>
         )}
       </div>
+      {department === "NPP" && !subSlug && (
+        <div className="mb-5 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="mr-2 text-sm font-bold text-walnut-700">Doctor categories</h2>
+            {[
+              ["/npp/categories", "Category board", LayoutGrid],
+              ["/npp/groups", "Groups", Users],
+              ["/npp/outreach", "Campaigns", Send],
+              ["/npp/inbox", "Replies inbox", Inbox],
+              ["/npp/analytics", "Category analytics", BarChart3],
+            ].map(([href, label, Icon]) => {
+              const I = Icon as React.ComponentType<{ className?: string }>;
+              return (
+                <Link key={href as string} href={href as string}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-muted shadow-[0_1px_2px_rgba(41,37,31,0.05)] transition-all hover:-translate-y-px hover:border-sage-300 hover:text-sage-800 hover:shadow-card">
+                  <I className="h-3.5 w-3.5" /> {label as string}
+                </Link>
+              );
+            })}
+          </div>
+          <CategoryCards hrefFor={(k) => `/npp?category=${k === "UNASSIGNED" ? "none" : k}`} />
+        </div>
+      )}
       {subSlug && !isLoading && !current ? (
         <Card>
           <EmptyState title={`No ${subSlug.replace(/-/g, " ")} doctors found.`} description="Try changing your filters or search criteria." />

@@ -16,7 +16,8 @@ import { Input, Select } from "@/components/ui/input";
 import { EmptyState, ErrorState, Pagination, Skeleton, Td, Th, Tooltip } from "@/components/ui/misc";
 import { api } from "@/lib/api";
 import type { DoctorRow, Facets, Paged } from "@/lib/types";
-import { cn, DEPARTMENT_LABEL, formatDate, formatDayMonth, ISSUE_LABEL, whatsappLink } from "@/lib/utils";
+import { cn, DEPARTMENT_LABEL, formatDate, formatDayMonth, ISSUE_LABEL, number, whatsappLink } from "@/lib/utils";
+import { AddToGroupDialog, AssignCategoryDialog, CategoryBadge, saveOutreachSelection, type Selection } from "@/components/npp/shared";
 
 type ColumnKey =
   | "s_no" | "doctor_name" | "qualification" | "specialty" | "category" | "department" | "institute" | "city"
@@ -93,6 +94,9 @@ export function DoctorDirectory({
     Object.fromEntries(COLUMNS.map((c) => [c.key, c.defaultVisible])) as Record<ColumnKey, boolean>,
   );
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [allFiltered, setAllFiltered] = React.useState(false);
+  const [assign, setAssign] = React.useState<{ target: "A" | "B" | "C" | "CLEAR" } | null>(null);
+  const [groupOpen, setGroupOpen] = React.useState(false);
 
   React.useEffect(() => setColumns(loadColumns()), []);
   React.useEffect(() => {
@@ -100,12 +104,27 @@ export function DoctorDirectory({
     return () => clearTimeout(t);
   }, [q]);
   React.useEffect(() => setQ(params.get("q") ?? ""), [params]);
+  // follow links such as /npp?category=A (category cards) while already on the page
+  React.useEffect(() => {
+    const next: Partial<Record<FilterKey, string>> = {};
+    FILTER_KEYS.forEach((k) => {
+      const v = params.get(k);
+      if (v) next[k] = v;
+    });
+    setFilters((cur) => (JSON.stringify(cur) === JSON.stringify(next) ? cur : next));
+  }, [params]);
   React.useEffect(() => {
     setPage(1);
     setSelected(new Set());
+    setAllFiltered(false);
   }, [debouncedQ, filters, pageSize]);
 
   const query = { q: debouncedQ, ...filters, ...fixed };
+  // NPP CRM bulk actions (categories, groups, outreach) on NPP lists
+  const crm = !!me?.departments.includes("NPP") && (query.department === "NPP" || me?.role === "NPP");
+  const selection: Selection | null = allFiltered
+    ? { filters: Object.fromEntries(Object.entries(query).filter(([k, v]) => k !== "department" && v)) as Record<string, string> }
+    : selected.size ? { doctor_ids: [...selected] } : null;
   const { data: facets } = useQuery({ queryKey: ["facets"], queryFn: () => api.get<Facets>("/doctors/facets") });
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["doctors", query, page, pageSize, sort],
@@ -167,7 +186,14 @@ export function DoctorDirectory({
   const allSelected = items.length > 0 && items.every((d) => selected.has(d.id));
 
   return (
-    <div className="rounded-lg border border-line bg-white shadow-card">
+    <div className="rounded-card border border-line/80 bg-white shadow-card">
+      {crm && (
+        <>
+          <AssignCategoryDialog open={!!assign} onOpenChange={(v) => !v && setAssign(null)} selection={selection}
+            initialCategory={assign?.target} source="BULK" onDone={() => { setSelected(new Set()); setAllFiltered(false); }} />
+          <AddToGroupDialog open={groupOpen} onOpenChange={setGroupOpen} selection={selection} />
+        </>
+      )}
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
         <div className="relative min-w-[240px] flex-1">
@@ -226,7 +252,7 @@ export function DoctorDirectory({
           <FilterSelect label="Specialty" value={filters.specialty} onChange={(v) => setFilter("specialty", v)}
             options={(facets?.specialties ?? []).map((s) => [s, s])} />
           <FilterSelect label="Category" value={filters.category} onChange={(v) => setFilter("category", v)}
-            options={["A", "B", "C"].map((c) => [c, `Category ${c}`])} />
+            options={[...["A", "B", "C"].map((c) => [c, `Category ${c}`] as [string, string]), ["none", "Unassigned"]]} />
           <FilterSelect label="City" value={filters.city} onChange={(v) => setFilter("city", v)}
             options={(facets?.cities ?? []).map((c) => [c, c])} />
           <FilterSelect label="BDM" value={filters.bdm} onChange={(v) => setFilter("bdm", v)}
@@ -251,7 +277,7 @@ export function DoctorDirectory({
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
           {activeChips.map(([k, v]) => (
             <span key={k} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-800">
-              <span className="text-brand-500">{FILTER_LABEL[k]}:</span> {k === "department" ? DEPARTMENT_LABEL[v] : v}
+              <span className="text-brand-500">{FILTER_LABEL[k]}:</span> {k === "department" ? DEPARTMENT_LABEL[v] : k === "category" ? (v === "none" ? "Unassigned" : `Category ${v}`) : v}
               <button onClick={() => setFilter(k, "")} aria-label={`Remove ${FILTER_LABEL[k]} filter`}>
                 <X className="h-3 w-3" />
               </button>
@@ -264,16 +290,45 @@ export function DoctorDirectory({
           )}
           {selected.size > 0 && (
             <div className="ml-auto flex items-center gap-2 text-xs">
-              <span className="font-medium text-ink">{selected.size} selected</span>
+              <span className="font-medium text-ink">{allFiltered ? `All ${number(data?.total ?? 0)} matching doctors selected` : `${selected.size} selected`}</span>
+              {crm && !allFiltered && allSelected && (data?.total ?? 0) > items.length && (
+                <button className="font-semibold text-sage-700 hover:underline" onClick={() => setAllFiltered(true)}>
+                  Select all {number(data?.total ?? 0)} matching doctors
+                </button>
+              )}
               <Button size="sm" variant="outline" onClick={exportSelected}>
                 <Download className="h-3.5 w-3.5" /> Export selected
               </Button>
-              <Tooltip label="Bulk email and WhatsApp arrive in phase 2">
-                <Button size="sm" variant="outline" disabled>
-                  <Mail className="h-3.5 w-3.5" /> Send email
-                </Button>
-              </Tooltip>
-              <button className="text-ink-soft hover:text-ink" onClick={() => setSelected(new Set())}>
+              {crm && (
+                <>
+                  <Dropdown.Root>
+                    <Dropdown.Trigger asChild>
+                      <Button size="sm" variant="secondary">Set category</Button>
+                    </Dropdown.Trigger>
+                    <Dropdown.Portal>
+                      <Dropdown.Content align="end" sideOffset={6} className="z-50 w-44 animate-pop-in rounded-xl border border-line bg-white p-1 shadow-pop">
+                        {(["A", "B", "C", "CLEAR"] as const).map((t) => (
+                          <Dropdown.Item key={t} onSelect={() => setAssign({ target: t })}
+                            className="cursor-pointer rounded-lg px-3 py-1.5 text-sm outline-none hover:bg-cream/60 focus:bg-cream/60">
+                            {t === "CLEAR" ? "Clear (Unassigned)" : `Category ${t}`}
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.Content>
+                    </Dropdown.Portal>
+                  </Dropdown.Root>
+                  <Button size="sm" variant="outline" onClick={() => setGroupOpen(true)}>Add to group</Button>
+                  {allFiltered ? (
+                    <Tooltip label="To message every matching doctor, add them to a group, then email or WhatsApp the group">
+                      <Button size="sm" variant="outline" disabled><Mail className="h-3.5 w-3.5" /> Email / WhatsApp</Button>
+                    </Tooltip>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => { saveOutreachSelection([...selected]); router.push("/npp/outreach"); }}>
+                      <Mail className="h-3.5 w-3.5" /> Email / WhatsApp
+                    </Button>
+                  )}
+                </>
+              )}
+              <button className="text-ink-soft hover:text-ink" onClick={() => { setSelected(new Set()); setAllFiltered(false); }}>
                 Clear
               </button>
             </div>
@@ -425,7 +480,7 @@ function Cell({ doctor: d, column }: { doctor: DoctorRow; column: ColumnKey }) {
     case "department":
       return <Badge tone={departmentTone(d.department)}>{DEPARTMENT_LABEL[d.department]}</Badge>;
     case "category":
-      return d.category ? <Badge tone="brand">Cat {d.category}</Badge> : <span className="text-ink-soft">—</span>;
+      return <CategoryBadge category={d.category} />;
     case "email":
       return d.email ? <span className="text-ink-muted">{d.email}</span> : <span className="text-ink-soft">—</span>;
     case "date_of_birth":

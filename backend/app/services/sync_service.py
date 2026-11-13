@@ -188,6 +188,9 @@ async def run_sync(user: CurrentUser | None, trigger_type: str = "manual") -> di
                     "name_norm": doc.fields.get("name_norm"),
                     "city_norm": doc.fields.get("city_norm"),
                     "extra": doc.fields.get("extra") or {},
+                    # what the sheet itself says; the DB trigger only applies a category
+                    # change when this differs from the previous sheet value (blank never erases)
+                    "category_sheet_value": doc.fields.get("category"),
                     "data_issues": doc.issues,
                     "department": doc.department,
                     "dedupe_key": doc.dedupe_key,

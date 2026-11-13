@@ -7,6 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { AlertTriangle, ArrowRight, Bell, Cake, Dna, HeartPulse, Mail, MessageCircle, MessageSquareHeart, Send, Stethoscope, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCountUp } from "@/lib/motion";
+import { CategoryCards } from "@/components/npp/shared";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -197,6 +198,16 @@ export default function DashboardPage() {
                 hint={data.upcoming_birthdays ? "Open the calendar →" : "Add birthdays: see Calendar & Birthdays →"} />
             </Link>
           </div>
+
+          {me?.departments.includes("NPP") && (
+            <section className="mt-6">
+              <div className="mb-2.5 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-walnut-700">NPP doctor categories</h2>
+                <Link href="/npp/categories" className="text-xs font-semibold text-sage-700 hover:underline">Category board →</Link>
+              </div>
+              <CategoryCards hrefFor={(k) => `/npp?category=${k === "UNASSIGNED" ? "none" : k}`} />
+            </section>
+          )}
 
           <div className="stagger mt-6 grid gap-4 xl:grid-cols-2">
             <Card interactive tilt={1}>

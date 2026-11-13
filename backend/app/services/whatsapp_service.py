@@ -134,3 +134,39 @@ def parse_webhook(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "occurred_at": occurred, "error": err, "payload": st,
             })
     return events
+
+
+def parse_inbound(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Incoming WhatsApp messages (doctor replies), Meta Cloud API format as Cunnekt forwards them."""
+    out: list[dict[str, Any]] = []
+    values: list[dict[str, Any]] = []
+    entries = payload.get("entry") if isinstance(payload, dict) else None
+    if isinstance(entries, list):
+        for e in entries:
+            for ch in (e or {}).get("changes") or []:
+                values.append((ch or {}).get("value") or {})
+    elif isinstance(payload, dict) and "messages" in payload:
+        values.append(payload)
+    for v in values:
+        for msg in v.get("messages") or []:
+            if not isinstance(msg, dict) or not msg.get("id") or not msg.get("from"):
+                continue
+            mtype = str(msg.get("type") or "text")
+            text = None
+            if mtype == "text":
+                text = (msg.get("text") or {}).get("body")
+            elif mtype == "button":
+                text = (msg.get("button") or {}).get("text")
+            elif mtype == "interactive":
+                it = msg.get("interactive") or {}
+                text = ((it.get("button_reply") or {}).get("title") or (it.get("list_reply") or {}).get("title"))
+            elif mtype in ("image", "video", "document", "audio"):
+                text = (msg.get(mtype) or {}).get("caption")
+            occurred = None
+            ts = msg.get("timestamp")
+            if ts and str(ts).isdigit():
+                from datetime import datetime, timezone
+                occurred = datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
+            out.append({"id": str(msg["id"]), "from": str(msg["from"]), "type": mtype,
+                        "text": (text or "")[:2000], "occurred_at": occurred})
+    return out

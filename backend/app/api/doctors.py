@@ -83,6 +83,9 @@ def build_filters(
     contact: str | None,
     data_issue: str | None,
     reply: str | None = None,
+    state: str | None = None,
+    institute: str | None = None,
+    has_whatsapp: bool | None = None,
 ) -> list[tuple[str, str]]:
     departments = user.ensure_department(department)
     f: list[tuple[str, str]] = [("department", f"in.({','.join(departments)})")]
@@ -93,8 +96,18 @@ def build_filters(
         f.append(("sub_department", "is.null" if sub_department == "Unassigned" else f"eq.{sub_department}"))
     if specialty:
         f.append(("specialty", f"eq.{specialty}"))
-    if category:
+    if category == "none":
+        f.append(("category", "is.null"))
+    elif category:
         f.append(("category", f"eq.{category}"))
+    if state:
+        f.append(("state", f"eq.{state}"))
+    if institute:
+        safe = re.sub(r"[^\w\s&.-]", " ", institute).strip()
+        if safe:
+            f.append(("institute", f"ilike.*{safe}*"))
+    if has_whatsapp is not None:
+        f.append(("whatsapp_number", "not.is.null" if has_whatsapp else "is.null"))
     if city:
         f.append(("city_norm", f"eq.{city.strip().lower()}"))
     if bdm:
@@ -135,7 +148,7 @@ def _filter_params(
     department: str | None = None,
     sub_department: str | None = None,
     specialty: str | None = None,
-    category: str | None = Query(None, pattern="^[ABC]$"),
+    category: str | None = Query(None, pattern="^([ABC]|none)$"),
     city: str | None = None,
     bdm: str | None = None,
     nsm: str | None = None,
@@ -144,6 +157,9 @@ def _filter_params(
     contact: str | None = None,
     data_issue: str | None = None,
     reply: str | None = Query(None, pattern="^(replied|auto|any|none|email|whatsapp)$"),
+    state: str | None = None,
+    institute: str | None = Query(None, max_length=120),
+    has_whatsapp: bool | None = None,
 ) -> dict[str, Any]:
     return locals()
 

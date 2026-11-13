@@ -17,6 +17,8 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState, ErrorState, Skeleton, Tooltip } from "@/components/ui/misc";
 import { api, ApiError } from "@/lib/api";
 import type { CommEvent, Doctor, SourceRow } from "@/lib/types";
+import { CategoryPanel } from "@/components/npp/category-panel";
+import { CategoryBadge } from "@/components/npp/shared";
 import { cn, DEPARTMENT_LABEL, formatDate, formatDateTime, formatDayMonth, ISSUE_LABEL, whatsappLink } from "@/lib/utils";
 
 type DoctorDetail = { doctor: Doctor; sources: SourceRow[]; events: CommEvent[] };
@@ -89,7 +91,7 @@ export default function DoctorProfilePage() {
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Link href={deptPath}><Badge tone={departmentTone(d.department)}>{DEPARTMENT_LABEL[d.department]}</Badge></Link>
                 {d.sub_department && <Badge tone="neutral">{d.sub_department}</Badge>}
-                {d.category && <Badge tone="brand">Category {d.category}</Badge>}
+                {(d.category || d.department === "NPP") && <CategoryBadge category={d.category} />}
                 {d.bdm && <Badge tone="neutral">BDM: {d.bdm}</Badge>}
                 {d.nsm && <Badge tone="neutral">NSM: {d.nsm}</Badge>}
               </div>
@@ -131,7 +133,7 @@ export default function DoctorProfilePage() {
                 <Field label="Specialty" value={d.specialty} />
                 <Field label="Department" value={DEPARTMENT_LABEL[d.department]} />
                 <Field label="Sub-department" value={d.sub_department} />
-                <Field label="Category" value={d.category && `Category ${d.category}`} />
+                <Field label="Category" value={d.category ? `Category ${d.category}` : "Unassigned"} />
                 <Field label="BDM" value={d.bdm} />
                 <Field label="Manager / NSM" value={d.nsm} />
                 <Field label="S.No. in sheet" value={d.s_no} />
@@ -187,6 +189,7 @@ export default function DoctorProfilePage() {
         </div>
 
         <div className="space-y-5">
+          {d.department === "NPP" && <CategoryPanel doctorId={d.id} category={d.category} />}
           <Card>
             <CardHeader title="Contact" />
             <CardBody>
@@ -206,7 +209,9 @@ export default function DoctorProfilePage() {
               <dl className="grid grid-cols-2 gap-4">
                 <Field label="Emails sent" value={String(d.emails_sent)} />
                 <Field label="WhatsApp messages" value={String(d.whatsapp_sent)} />
-                <Field label="Replies" value="0" />
+                <Field label="Email reply" value={d.email_reply_status ? `${d.email_reply_status}${d.email_reply_at ? " · " + formatDate(d.email_reply_at) : ""}` : "None"} />
+                <Field label="WhatsApp reply" value={d.whatsapp_reply_status ? `${d.whatsapp_reply_status}${d.whatsapp_reply_at ? " · " + formatDate(d.whatsapp_reply_at) : ""}` : "None"} />
+                <Field label="Status" value={d.replies_count ? "Engaged (replied)" : d.emails_sent || d.whatsapp_sent ? "Awaiting reply" : "Not contacted"} />
                 <Field label="Last contact" value={d.last_contact_at ? formatDate(d.last_contact_at) : d.last_contact_status ? "Date not recorded" : "Never"} />
               </dl>
             </CardBody>

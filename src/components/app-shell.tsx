@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
   Activity, AlertTriangle, BarChart3, Bell, Briefcase, Cake, CalendarDays, ChevronDown, ChevronsLeft, ChevronsRight, Dna, FileSpreadsheet,
-  FileText, HeartPulse, LayoutDashboard, LogOut, Loader2, Menu, MessageSquareHeart, Pill, RefreshCw, Search, Shield, Sparkles, Stethoscope,
+  FileText, HeartPulse, Inbox, LayoutDashboard, LayoutGrid, LogOut, Loader2, Menu, MessageSquareHeart, Pill, RefreshCw, Search, Send, Shield, Sparkles, Stethoscope,
   UserPlus, Users, X,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
@@ -46,7 +46,14 @@ function useNav(): NavItem[] {
     items.push({ href: "/rare-diseases", label: "Rare Diseases", icon: Dna, children: subs("RARE_DISEASES") });
   }
   if (me.departments.includes("NPP")) {
-    items.push({ href: "/new-doctors", label: "New Doctors", icon: UserPlus });
+    items.push(
+      { href: "/npp/categories", label: "NPP Categories", icon: LayoutGrid },
+      { href: "/npp/groups", label: "NPP Groups", icon: Users },
+      { href: "/npp/outreach", label: "NPP Campaigns", icon: Send },
+      { href: "/npp/inbox", label: "NPP Replies", icon: Inbox },
+      { href: "/npp/analytics", label: "NPP Analytics", icon: BarChart3 },
+      { href: "/new-doctors", label: "New Doctors", icon: UserPlus },
+    );
   }
   items.push(
     { href: "/fda", label: "FDA", icon: Pill },
@@ -66,8 +73,6 @@ function useNav(): NavItem[] {
   return items;
 }
 
-const UPCOMING = ["Communications", "Campaigns", "Analytics"];
-
 function initials(name: string): string {
   return name.split(/[\s@.]/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
 }
@@ -76,7 +81,9 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
   const pathname = usePathname();
   const nav = useNav();
   const { me, signOut } = useAuth();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const CRM = ["/npp/categories", "/npp/groups", "/npp/outreach", "/npp/inbox", "/npp/analytics"];
+  const isActive = (href: string) =>
+    pathname === href || (pathname.startsWith(href + "/") && !(href === "/npp" && CRM.some((c) => pathname.startsWith(c))));
   return (
     <nav className="relative flex h-full flex-col overflow-hidden bg-gradient-to-b from-walnut-700 via-walnut-700 to-walnut-800 shadow-inset-walnut" aria-label="Main">
       {/* soft ambient lighting */}
@@ -148,17 +155,6 @@ function Sidebar({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () 
             </div>
           );
         })}
-        {!collapsed && (
-          <div className="pt-5">
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-walnut-300">Coming in phase 2</p>
-            {UPCOMING.map((label) => (
-              <div key={label} className="flex items-center gap-3 px-3 py-1.5 text-[13px] text-walnut-300/80">
-                <BarChart3 className="h-4 w-4 opacity-60" />
-                {label}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* profile */}

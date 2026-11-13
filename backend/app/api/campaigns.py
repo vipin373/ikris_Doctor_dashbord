@@ -298,12 +298,21 @@ async def cunnekt_webhook(request: Request, token: str = Query(..., min_length=1
     except ValueError:
         raise HTTPException(400, "Invalid JSON")
     events = whatsapp_service.parse_webhook(payload)
-    if not events:
+    inbound = whatsapp_service.parse_inbound(payload)
+    if not events and not inbound:
         return {"ok": True, "events": 0}
+    db = PostgREST()
+    n = replies = outreach = 0
     try:
-        n = await PostgREST().rpc("fda_record_status", {"p_token": token, "p_events": events})
+        if events:
+            n = await db.rpc("fda_record_status", {"p_token": token, "p_events": events})
+            outreach = await db.rpc("outreach_record_status", {"p_token": token, "p_events": events})
+        if inbound:
+            # doctor replies, matched to doctors by WhatsApp number
+            replies = await db.rpc("record_whatsapp_inbound", {"p_token": token, "p_messages": inbound})
     except SupabaseError as exc:
         if "Invalid webhook token" in exc.message:
             raise HTTPException(401, "Invalid token")
         raise
-    return {"ok": True, "events": len(events), "updated": n}
+    return {"ok": True, "events": len(events), "updated": n, "outreach_updated": outreach,
+            "inbound": len(inbound), "replies_recorded": replies}
