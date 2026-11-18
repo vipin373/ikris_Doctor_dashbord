@@ -23,6 +23,7 @@ export interface DoctorRow {
   state: string | null;
   bdm: string | null;
   nsm: string | null;
+  sheet_error?: string | null;
   contact_number: string | null;
   whatsapp_number: string | null;
   email: string | null;
@@ -106,6 +107,7 @@ export interface Facets {
   bdms: string[];
   nsms: string[];
   contact_statuses: string[];
+  sheet_errors?: { department: Department; value: string; count: number }[];
 }
 
 export interface DashboardSummary {

@@ -20,6 +20,8 @@ export function DepartmentView({ department, subSlug }: { department: Department
   const { data: facets, isLoading } = useQuery({ queryKey: ["facets"], queryFn: () => api.get<Facets>("/doctors/facets") });
   const subs = (facets?.sub_departments ?? []).filter((s) => s.department === department);
   const total = subs.reduce((n, s) => n + s.count, 0);
+  const errorCounts = (facets?.sheet_errors ?? []).filter((s) => s.department === department);
+  const errorTotal = errorCounts.reduce((n, e) => n + e.count, 0);
   const current = subSlug ? subs.find((s) => slugify(s.value) === subSlug) : undefined;
 
   if (me && !me.departments.includes(department)) {
@@ -83,6 +85,22 @@ export function DepartmentView({ department, subSlug }: { department: Department
             })}
           </div>
           <CategoryCards hrefFor={(k) => `/npp?category=${k === "UNASSIGNED" ? "none" : k}`} />
+        </div>
+      )}
+      {department === "RARE_DISEASES" && !subSlug && errorCounts.length > 0 && (
+        <div className="mb-5">
+          <h2 className="mb-2 text-sm font-bold text-walnut-700">Error column (from the sheet)</h2>
+          <div className="flex flex-wrap gap-3">
+            {errorCounts.map((e) => (
+              <a key={e.value} href={`${BASE[department]}?sheet_error=${encodeURIComponent(e.value)}`}
+                className={cn("min-w-[170px] rounded-lg border bg-white px-4 py-3 shadow-card transition-colors hover:border-brand-200",
+                  /\binvalid\b/i.test(e.value) ? "border-red-200" : /\bvalid\b/i.test(e.value) ? "border-sage-200" : "border-line")}>
+                <p className={cn("text-xs font-semibold", /\binvalid\b/i.test(e.value) ? "text-red-700" : /\bvalid\b/i.test(e.value) ? "text-sage-700" : "text-ink-soft")}>{e.value}</p>
+                <p className="text-lg font-semibold tabular-nums text-ink">{e.count.toLocaleString("en-IN")}</p>
+                <p className="text-[11px] text-ink-soft">{errorTotal ? Math.round((100 * e.count) / errorTotal) : 0}% · click to see the list</p>
+              </a>
+            ))}
+          </div>
         </div>
       )}
       {subSlug && !isLoading && !current ? (

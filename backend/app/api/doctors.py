@@ -23,11 +23,11 @@ LIST_COLUMNS = (
     "bdm,nsm,contact_number,whatsapp_number,email,date_of_birth,date_of_anniversary,last_contact_at,last_contact_status,"
     "last_contact_channel,emails_sent,whatsapp_sent,last_whatsapp_status,last_whatsapp_at,"
     "last_reply_at,last_reply_status,last_reply_channel,last_reply_text,replies_count,"
-    "email_reply_status,email_reply_at,email_reply_text,whatsapp_reply_status,whatsapp_reply_at,whatsapp_reply_text,data_issues"
+    "email_reply_status,email_reply_at,email_reply_text,whatsapp_reply_status,whatsapp_reply_at,whatsapp_reply_text,data_issues,sheet_error"
 )
 SORTABLE = {
     "doctor_name", "specialty", "category", "institute", "city", "state", "bdm", "nsm", "department",
-    "sub_department", "last_contact_at", "last_whatsapp_at", "last_reply_at", "email_reply_at", "whatsapp_reply_at", "emails_sent", "created_at",
+    "sub_department", "sheet_error", "last_contact_at", "last_whatsapp_at", "last_reply_at", "email_reply_at", "whatsapp_reply_at", "emails_sent", "created_at",
 }
 
 # "oncologist" should find "Oncology" / "ONC", "geneticist" -> "Genetics", etc.
@@ -86,6 +86,7 @@ def build_filters(
     state: str | None = None,
     institute: str | None = None,
     has_whatsapp: bool | None = None,
+    sheet_error: str | None = None,
 ) -> list[tuple[str, str]]:
     departments = user.ensure_department(department)
     f: list[tuple[str, str]] = [("department", f"in.({','.join(departments)})")]
@@ -108,6 +109,10 @@ def build_filters(
             f.append(("institute", f"ilike.*{safe}*"))
     if has_whatsapp is not None:
         f.append(("whatsapp_number", "not.is.null" if has_whatsapp else "is.null"))
+    if sheet_error == "none":
+        f.append(("sheet_error", "is.null"))
+    elif sheet_error:
+        f.append(("sheet_error", f"eq.{sheet_error}"))
     if city:
         f.append(("city_norm", f"eq.{city.strip().lower()}"))
     if bdm:
@@ -160,6 +165,7 @@ def _filter_params(
     state: str | None = None,
     institute: str | None = Query(None, max_length=120),
     has_whatsapp: bool | None = None,
+    sheet_error: str | None = Query(None, max_length=80),
 ) -> dict[str, Any]:
     return locals()
 
@@ -200,7 +206,7 @@ async def export_doctors(
         ("S.No", "s_no"), ("Doctor Name", "doctor_name"), ("Qualification", "qualification"),
         ("Department", "department"), ("Sub-Department", "sub_department"), ("Specialty", "specialty"),
         ("Category", "category"), ("Institute", "institute"), ("Institute Address", "institute_address"),
-        ("City", "city"), ("State", "state"), ("Country", "country"), ("BDM", "bdm"), ("Manager / NSM", "nsm"),
+        ("City", "city"), ("State", "state"), ("Country", "country"), ("BDM", "bdm"), ("Manager / NSM", "nsm"), ("Error (sheet)", "sheet_error"),
         ("Contact Number", "contact_number"), ("WhatsApp", "whatsapp_number"), ("Email", "email"),
         ("Date of Birth", "date_of_birth"), ("Date of Anniversary", "date_of_anniversary"),
         ("Emails Sent", "emails_sent"), ("Last Contact", "last_contact_at"), ("Last Status", "last_contact_status"),

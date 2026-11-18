@@ -21,11 +21,12 @@ import { AddToGroupDialog, AssignCategoryDialog, CategoryBadge, saveOutreachSele
 
 type ColumnKey =
   | "s_no" | "doctor_name" | "qualification" | "specialty" | "category" | "department" | "institute" | "city"
-  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at" | "email_reply_at" | "whatsapp_reply_at";
+  | "state" | "bdm" | "nsm" | "contact_number" | "whatsapp_number" | "email" | "date_of_birth" | "date_of_anniversary" | "last_contact_at" | "last_whatsapp_at" | "email_reply_at" | "whatsapp_reply_at" | "sheet_error";
 
 const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisible: boolean }[] = [
   { key: "s_no", label: "S.No.", defaultVisible: false },
   { key: "doctor_name", label: "Doctor Name", sortable: true, defaultVisible: true },
+  { key: "sheet_error", label: "Error", sortable: true, defaultVisible: true },
   { key: "qualification", label: "Qualification", defaultVisible: false },
   { key: "specialty", label: "Specialty", sortable: true, defaultVisible: true },
   { key: "category", label: "Category", sortable: true, defaultVisible: true },
@@ -47,13 +48,13 @@ const COLUMNS: { key: ColumnKey; label: string; sortable?: boolean; defaultVisib
 ];
 
 const FILTER_KEYS = [
-  "department", "sub_department", "specialty", "category", "city", "bdm", "nsm", "has_email", "has_phone", "contact", "reply", "data_issue",
+  "department", "sub_department", "specialty", "category", "city", "bdm", "nsm", "has_email", "has_phone", "contact", "reply", "data_issue", "sheet_error",
 ] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 const FILTER_LABEL: Record<FilterKey, string> = {
   department: "Department", sub_department: "Sub-department", specialty: "Specialty", category: "Category", city: "City",
-  bdm: "BDM", nsm: "Manager / NSM", has_email: "Email", has_phone: "Phone", contact: "Communication", reply: "Reply", data_issue: "Data quality",
+  bdm: "BDM", nsm: "Manager / NSM", has_email: "Email", has_phone: "Phone", contact: "Communication", reply: "Reply", data_issue: "Data quality", sheet_error: "Error",
 };
 
 function loadColumns(): Record<ColumnKey, boolean> {
@@ -166,7 +167,7 @@ export function DoctorDirectory({
 
   const exportSelected = () => {
     const rows = (data?.items ?? []).filter((d) => selected.has(d.id));
-    const cols: ColumnKey[] = ["doctor_name", "specialty", "department", "institute", "city", "state", "bdm", "nsm", "contact_number", "whatsapp_number", "email"];
+    const cols: ColumnKey[] = ["doctor_name", "specialty", "department", "institute", "city", "state", "bdm", "nsm", "sheet_error", "contact_number", "whatsapp_number", "email"];
     const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -176,7 +177,10 @@ export function DoctorDirectory({
     URL.revokeObjectURL(url);
   };
 
-  const visible = COLUMNS.filter((c) => columns[c.key] && !(c.key === "department" && fixed.department));
+  const errorValues = (facets?.sheet_errors ?? []).filter((s) => !(filters.department || fixed.department) || s.department === (filters.department || fixed.department));
+  // The sheet "Error" column exists only in some sheets (Rare Diseases); hide it where there is no data.
+  const visible = COLUMNS.filter((c) => columns[c.key] && !(c.key === "department" && fixed.department)
+    && !(c.key === "sheet_error" && errorValues.length === 0));
   const departmentChoices = me?.departments ?? [];
   const subChoices = (facets?.sub_departments ?? []).filter(
     (s) => !(filters.department || fixed.department) || s.department === (filters.department || fixed.department),
@@ -267,6 +271,10 @@ export function DoctorDirectory({
             options={[["contacted", "Email sent"], ["not_contacted", "Not contacted"], ...(facets?.contact_statuses ?? []).map((s) => [s, `Last status: ${s}`] as [string, string])]} />
           <FilterSelect label="Reply" value={filters.reply} onChange={(v) => setFilter("reply", v)}
             options={[["email", "Replied by email"], ["whatsapp", "Replied on WhatsApp"], ["replied", "Replied (any channel)"], ["auto", "Auto-reply only"], ["any", "Any reply"], ["none", "No reply yet"]]} />
+          {errorValues.length > 0 && (
+            <FilterSelect label="Error (sheet)" value={filters.sheet_error} onChange={(v) => setFilter("sheet_error", v)}
+              options={[...Array.from(new Map(errorValues.map((s) => [s.value, s])).values()).map((s) => [s.value, `${s.value} (${s.count})`] as [string, string]), ["none", "Blank"]]} />
+          )}
           <FilterSelect label="Data quality" value={filters.data_issue} onChange={(v) => setFilter("data_issue", v)}
             options={[["any", "Any issue"], ...Object.entries(ISSUE_LABEL).slice(0, 5)]} />
         </div>
@@ -486,6 +494,8 @@ function Cell({ doctor: d, column }: { doctor: DoctorRow; column: ColumnKey }) {
     case "date_of_birth":
     case "date_of_anniversary":
       return <>{formatDayMonth(d[column])}</>;
+    case "sheet_error":
+      return d.sheet_error ? <Badge tone={errorTone(d.sheet_error)}>{d.sheet_error}</Badge> : <span className="text-ink-soft">—</span>;
     case "email_reply_at":
       return <ReplyCell status={d.email_reply_status} at={d.email_reply_at} text={d.email_reply_text} />;
     case "whatsapp_reply_at":
@@ -543,6 +553,13 @@ function RowActions({ doctor: d, onView }: { doctor: DoctorRow; onView: () => vo
   );
 }
 
+
+function errorTone(v: string): "green" | "red" | "amber" {
+  const s = v.toLowerCase();
+  if (/\binvalid\b|bounce|fail|wrong|error/.test(s)) return "red";
+  if (/\bvalid\b|^ok$/.test(s)) return "green";
+  return "amber";
+}
 
 function ReplyCell({ status, at, text }: { status?: string | null; at?: string | null; text?: string | null }) {
   if (!status) return <span className="text-ink-soft">—</span>;
